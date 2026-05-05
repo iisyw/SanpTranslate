@@ -29,16 +29,10 @@ export interface PinState {
   size: { width: number; height: number }
   /** 翻译状态 */
   translateStatus: 'idle' | 'translating' | 'done' | 'error'
-  /** 翻译模式 */
-  translateMode: 'ocr' | 'multimodal'
-  /** OCR 识别的文本块列表 */
-  ocrBlocks: TranslatedBlock[]
-  /** 多模态翻译结果文本 */
-  multimodalText: string
+  /** 翻译块列表 */
+  translatedBlocks: TranslatedBlock[]
   /** 是否显示原文 */
   showOriginal: boolean
-  /** 是否显示翻译面板 */
-  showTransPanel: boolean
 }
 
 /** 贴图状态管理 */

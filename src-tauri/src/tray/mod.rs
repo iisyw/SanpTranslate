@@ -2,7 +2,7 @@ use crate::config::ShortcutConfig;
 use crate::error::AppError;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::AppHandle;
@@ -97,7 +97,7 @@ pub fn create_tray(app: &AppHandle, shortcuts: &ShortcutConfig) -> Result<(), Ap
                     Ok(())
                 })() {
                     Ok(_) => {}
-                    Err(e) => eprintln!("截图失败: {}", e),
+                    Err(e) => log::error!("截图失败: {}", e),
                 }
             }
             "pin_clipboard" => {
@@ -130,20 +130,29 @@ pub fn create_tray(app: &AppHandle, shortcuts: &ShortcutConfig) -> Result<(), Ap
                     Ok(())
                 })() {
                     Ok(_) => {}
-                    Err(e) => eprintln!("剪贴板贴图失败: {}", e),
+                    Err(e) => log::error!("剪贴板贴图失败: {}", e),
                 }
             }
             "translate_recent" => {
-                // S3 阶段实现翻译最近贴图功能
+                // 查找最近的贴图窗口并发送翻译事件
+                let pin_windows: Vec<String> = app.webview_windows()
+                    .keys()
+                    .filter(|k| k.starts_with("pin-"))
+                    .cloned()
+                    .collect();
+
+                if let Some(label) = pin_windows.last() {
+                    let _ = app.emit_to(label, "trigger-translate", ());
+                }
             }
             "history" => {
                 if let Err(e) = crate::window::create_history_window(app) {
-                    eprintln!("创建历史窗口失败: {}", e);
+                    log::error!("创建历史窗口失败: {}", e);
                 }
             }
             "settings" => {
                 if let Err(e) = crate::window::create_settings_window(app) {
-                    eprintln!("创建设置窗口失败: {}", e);
+                    log::error!("创建设置窗口失败: {}", e);
                 }
             }
             "quit" => {

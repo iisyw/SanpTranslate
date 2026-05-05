@@ -38,7 +38,11 @@ pub fn run() {
             commands::get_pin_image,
             commands::capture_region_from_cache,
             commands::get_overlay_image,
-            commands::store_pin_image
+            commands::store_pin_image,
+            commands::translate_image,
+            commands::get_api_key,
+            commands::set_api_key,
+            commands::test_api_connection
         ])
         .setup(|app| {
             let config_manager = config::ConfigManager::new(app.handle())?;

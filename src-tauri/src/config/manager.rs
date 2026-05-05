@@ -6,16 +6,9 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
 
-/// 翻译模式
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub enum TranslateMode {
-    #[default]
-    Ocr,
-    Multimodal,
-}
-
 /// 快捷键配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ShortcutConfig {
     /// 截图翻译快捷键
     pub capture: String,
@@ -34,17 +27,14 @@ impl Default for ShortcutConfig {
 
 /// 应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AppConfig {
     /// API 基础地址
     pub api_base_url: String,
-    /// 文本模型名称
-    pub text_model: String,
-    /// 视觉模型名称（可选，多模态模式需要）
-    pub vision_model: Option<String>,
+    /// AI 模型名称
+    pub model: String,
     /// 目标语言
     pub target_language: String,
-    /// 默认翻译模式
-    pub default_mode: TranslateMode,
     /// 快捷键配置
     pub shortcuts: ShortcutConfig,
 }
@@ -53,10 +43,8 @@ impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
             api_base_url: String::new(),
-            text_model: String::new(),
-            vision_model: None,
+            model: String::new(),
             target_language: "zh-CN".to_string(),
-            default_mode: TranslateMode::Ocr,
             shortcuts: ShortcutConfig::default(),
         }
     }
@@ -117,5 +105,54 @@ impl ConfigManager {
     #[allow(dead_code)]
     pub fn get_config_dir(&self) -> &PathBuf {
         &self.config_dir
+    }
+
+    /// 从系统密钥环读取 API 密钥
+    /// 密钥不存在时返回 Ok(None)，密钥环不可用时返回友好错误
+    pub fn get_api_key(&self) -> Result<Option<String>, AppError> {
+        let entry = keyring::Entry::new("SnapTranslate", "api_key")
+            .map_err(|e| AppError::ConfigError(format!("无法访问系统密钥环: {}", e)))?;
+
+        match entry.get_password() {
+            Ok(password) => Ok(Some(password)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(AppError::ConfigError(format!(
+                "读取 API 密钥失败: {}",
+                e
+            ))),
+        }
+    }
+
+    /// 将 API 密钥写入系统密钥环
+    /// 若密钥为空字符串则调用 delete_api_key 删除
+    pub fn set_api_key(&self, key: &str) -> Result<(), AppError> {
+        if key.is_empty() {
+            return self.delete_api_key();
+        }
+
+        let entry = keyring::Entry::new("SnapTranslate", "api_key")
+            .map_err(|e| AppError::ConfigError(format!("无法访问系统密钥环: {}", e)))?;
+
+        entry
+            .set_password(key)
+            .map_err(|e| AppError::ConfigError(format!("保存 API 密钥失败: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// 从系统密钥环删除 API 密钥
+    /// 密钥不存在时静默返回 Ok(())
+    pub fn delete_api_key(&self) -> Result<(), AppError> {
+        let entry = keyring::Entry::new("SnapTranslate", "api_key")
+            .map_err(|e| AppError::ConfigError(format!("无法访问系统密钥环: {}", e)))?;
+
+        match entry.delete_credential() {
+            Ok(()) => Ok(()),
+            Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(AppError::ConfigError(format!(
+                "删除 API 密钥失败: {}",
+                e
+            ))),
+        }
     }
 }

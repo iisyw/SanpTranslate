@@ -9,6 +9,11 @@
       {{ translateStatus === 'error' ? '重新翻译' : 'AI翻译' }}
     </button>
 
+    <!-- error 状态：显示错误提示信息 -->
+    <span v-if="translateStatus === 'error' && errorMessage" class="error-msg">
+      {{ errorMessage }}
+    </span>
+
     <!-- translating 状态：显示禁用的翻译中按钮 -->
     <button
       v-else-if="translateStatus === 'translating'"
@@ -27,15 +32,6 @@
       <button class="btn" @click="$emit('toggleOriginal')">
         {{ showOriginal ? '显示译文' : '显示原文' }}
       </button>
-
-      <!-- 多模态模式下显示译文面板按钮 -->
-      <button
-        v-if="translateMode === 'multimodal'"
-        class="btn"
-        @click="$emit('openTransPanel')"
-      >
-        译文面板
-      </button>
     </template>
   </div>
 </template>
@@ -44,18 +40,15 @@
 /** 翻译状态类型 */
 type TranslateStatus = 'idle' | 'translating' | 'done' | 'error'
 
-/** 翻译模式类型 */
-type TranslateMode = 'ocr' | 'multimodal'
-
 defineProps<{
   /** 翻译状态 */
   translateStatus: TranslateStatus
-  /** 翻译模式 */
-  translateMode: TranslateMode
   /** 是否显示原文 */
   showOriginal: boolean
   /** 是否有翻译结果 */
   hasTranslation: boolean
+  /** 错误信息 */
+  errorMessage?: string
 }>()
 
 defineEmits<{
@@ -65,8 +58,6 @@ defineEmits<{
   copyAll: []
   /** 原文/译文切换按钮点击 */
   toggleOriginal: []
-  /** 译文面板按钮点击 */
-  openTransPanel: []
 }>()
 </script>
 
@@ -102,5 +93,15 @@ defineEmits<{
 
 .btn-primary:hover {
   background: var(--color-accent-hover);
+}
+
+/* 错误提示信息 */
+.error-msg {
+  font-size: 12px;
+  color: var(--color-danger);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

@@ -4,6 +4,7 @@
 
 | 文档版本 | 修订日期   | 作者   | 变更说明         |
 |----------|------------|--------|------------------|
+| V1.2     | 2026-05-05 | XuMingKe | 合并翻译模式，统一使用 OCR 翻译流程 |
 | V1.1     | 2026-05-02 | XuMingKe | 截图蒙版支持右键取消；贴图控制栏去除半透明背景 |
 | V1.0     | 2026-05-02 | XuMingKe | 初始版本         |
 
@@ -17,8 +18,8 @@
 
 ### 1.2 参考文档
 
-- 《SnapTranslate 概要设计说明书（HLD）V1.0》
-- 《SnapTranslate 系统/架构设计文档 V1.0》
+- 《SnapTranslate 概要设计说明书（HLD）V1.2》
+- 《SnapTranslate 系统/架构设计文档 V1.2》
 
 ---
 
@@ -90,28 +91,6 @@ pub enum ImageFormat {
 5. 封装为 CapturedImage 返回
 ```
 
-#### 2.1.5 Tauri Command
-
-```rust
-#[tauri::command]
-pub async fn capture_fullscreen(monitor_id: Option<String>) -> Result<String, String> {
-    let service = CaptureService::new().map_err(|e| e.to_string())?;
-    let image = service.capture_fullscreen(monitor_id.as_deref())
-        .map_err(|e| e.to_string())?;
-    Ok(base64_encode(&image.data))
-}
-
-#[tauri::command]
-pub async fn capture_region(x: i32, y: i32, width: u32, height: u32, monitor_id: Option<String>)
-    -> Result<String, String>
-{
-    let service = CaptureService::new().map_err(|e| e.to_string())?;
-    let region = CaptureRegion { x, y, width, height, monitor_id };
-    let image = service.capture_region(&region).map_err(|e| e.to_string())?;
-    Ok(base64_encode(&image.data))
-}
-```
-
 ---
 
 ### 2.2 ocr 模块
@@ -172,29 +151,13 @@ impl OcrEngine {
 11. 返回 OcrResult
 ```
 
-#### 2.2.4 Tauri Command
-
-```rust
-#[tauri::command]
-pub async fn ocr_recognize(image_data: String, lang: Option<String>) -> Result<OcrResult, String> {
-    let image_bytes = base64_decode(&image_data).map_err(|e| e.to_string())?;
-    let tessdata_dir = get_tessdata_dir().map_err(|e| e.to_string())?;
-    let lang = lang.unwrap_or_else(|| "eng".to_string());
-    let engine = OcrEngine::new(tessdata_dir, &lang).map_err(|e| e.to_string())?;
-
-    tokio::task::spawn_blocking(move || {
-        engine.recognize(&image_bytes).map_err(|e| e.to_string())
-    }).await.map_err(|e| e.to_string())?
-}
-```
-
 ---
 
 ### 2.3 translate 模块
 
 #### 2.3.1 模块职责
 
-构造翻译请求，调用大模型 API，解析翻译结果。
+构造翻译请求，调用大模型 API，解析翻译结果。统一使用 OCR 翻译模式。
 
 #### 2.3.2 核心结构体与函数
 
@@ -204,12 +167,7 @@ pub struct TranslateService {
     config: AppConfig,
 }
 
-pub struct OcrTranslateRequest {
-    pub blocks: Vec<OcrTextBlock>,
-    pub target_lang: String,
-}
-
-pub struct MultimodalTranslateRequest {
+pub struct TranslateRequest {
     pub image_data: String,
     pub target_lang: String,
 }
@@ -217,45 +175,31 @@ pub struct MultimodalTranslateRequest {
 impl TranslateService {
     pub fn new(config: AppConfig) -> Result<Self, AppError>;
 
-    pub async fn translate_ocr(&self, request: OcrTranslateRequest) -> Result<OcrTranslateResult, AppError>;
-
-    pub async fn translate_multimodal(&self, request: MultimodalTranslateRequest)
-        -> Result<MultimodalTranslateResult, AppError>;
+    pub async fn translate_image(&self, request: TranslateRequest) -> Result<TranslateResult, AppError>;
 
     pub async fn test_connection(&self) -> Result<(), AppError>;
 }
 ```
 
-#### 2.3.3 translate_ocr 算法
+#### 2.3.3 translate_image 算法
 
 ```
-1. 从 OcrTranslateRequest 中提取文本块
-2. 构造编号列表格式的用户消息：
+1. 调用 ocr 模块执行 Tesseract 识别
+2. 返回 OcrResult（含文本块及坐标）
+3. 构造编号列表格式的用户消息：
    "1. {block_1.text}\n2. {block_2.text}\n..."
-3. 构造系统消息：
+4. 构造系统消息：
    "你是一个翻译助手。请将以下编号文本翻译为{target_lang}。
     严格保持编号格式，每行一条译文。仅返回译文，不要添加解释。"
-4. 构造 OpenAI Chat Completions 请求体
-5. 发送 POST 请求到 {api_base_url}/chat/completions
-6. 设置超时为 30 秒
-7. 解析响应 JSON，提取 choices[0].message.content
-8. 按编号解析译文，映射回各文本块
-9. 返回 OcrTranslateResult
+5. 构造 OpenAI Chat Completions 请求体
+6. 发送 POST 请求到 {api_base_url}/chat/completions
+7. 设置超时为 30 秒
+8. 解析响应 JSON，提取 choices[0].message.content
+9. 按编号解析译文，映射回各文本块
+10. 返回 TranslateResult
 ```
 
-#### 2.3.4 translate_multimodal 算法
-
-```
-1. 构造多模态消息：
-   - 系统消息："你是一个翻译助手。请识别图像中的所有文字，并翻译为{target_lang}。"
-   - 用户消息包含 image_url（data:image/png;base64,{image_data}）和文本提示
-2. 构造 OpenAI Chat Completions 请求体（使用 vision 模型）
-3. 发送 POST 请求
-4. 解析响应，提取完整翻译文本
-5. 返回 MultimodalTranslateResult
-```
-
-#### 2.3.5 test_connection 算法
+#### 2.3.4 test_connection 算法
 
 ```
 1. 构造最小请求：发送 "Hello" 请求翻译
@@ -266,40 +210,30 @@ impl TranslateService {
 6. 其他错误返回具体错误信息
 ```
 
-#### 2.3.6 Tauri Command
+#### 2.3.5 Tauri Command
 
 ```rust
 #[tauri::command]
-pub async fn translate_ocr(
-    blocks: Vec<OcrTextBlock>,
-    target_lang: String,
-    app: tauri::AppHandle,
-) -> Result<OcrTranslateResult, String> {
-    let config = get_config(&app).map_err(|e| e.to_string())?;
-    let api_key = get_api_key(&app).map_err(|e| e.to_string())?;
-    let service = TranslateService::new(config, api_key).map_err(|e| e.to_string())?;
-    let request = OcrTranslateRequest { blocks, target_lang };
-    service.translate_ocr(request).await.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn translate_multimodal(
+pub async fn translate_image(
     image_data: String,
-    target_lang: String,
+    target_language: String,
     app: tauri::AppHandle,
-) -> Result<MultimodalTranslateResult, String> {
+) -> Result<TranslateResult, String> {
     let config = get_config(&app).map_err(|e| e.to_string())?;
     let api_key = get_api_key(&app).map_err(|e| e.to_string())?;
     let service = TranslateService::new(config, api_key).map_err(|e| e.to_string())?;
-    let request = MultimodalTranslateRequest { image_data, target_lang };
-    service.translate_multimodal(request).await.map_err(|e| e.to_string())
+    let request = TranslateRequest { image_data, target_lang: target_language };
+    service.translate_image(request).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn test_api_connection(app: tauri::AppHandle) -> Result<String, String> {
-    let config = get_config(&app).map_err(|e| e.to_string())?;
-    let api_key = get_api_key(&app).map_err(|e| e.to_string())?;
-    let service = TranslateService::new(config, api_key).map_err(|e| e.to_string())?;
+pub async fn test_api_connection(
+    api_base_url: String,
+    api_key: String,
+    model: String,
+) -> Result<String, String> {
+    let service = TranslateService::new_for_test(api_base_url, api_key, model)
+        .map_err(|e| e.to_string())?;
     service.test_connection().await.map_err(|e| e.to_string())?;
     Ok("连接成功".to_string())
 }
@@ -411,7 +345,6 @@ pub struct NewHistoryEntry {
     pub image_data: Vec<u8>,
     pub ocr_text: Option<String>,
     pub translated_text: String,
-    pub translate_mode: TranslateMode,
 }
 ```
 
@@ -423,8 +356,8 @@ pub struct NewHistoryEntry {
 3. 将缩略图编码为 JPEG（quality=80）以节省空间
 4. 获取当前时间戳（ISO 8601 格式）
 5. 执行 INSERT SQL：
-   INSERT INTO history (thumbnail, ocr_text, translated_text, translate_mode, created_at)
-   VALUES (?1, ?2, ?3, ?4, ?5)
+   INSERT INTO history (thumbnail, ocr_text, translated_text, created_at)
+   VALUES (?1, ?2, ?3, ?4)
 6. 返回新记录 ID
 7. 检查总记录数，若超过 max_history（默认50），删除最旧的记录
 ```
@@ -437,7 +370,6 @@ CREATE TABLE IF NOT EXISTS history (
     thumbnail BLOB NOT NULL,
     ocr_text TEXT,
     translated_text TEXT NOT NULL,
-    translate_mode TEXT NOT NULL CHECK(translate_mode IN ('ocr', 'multimodal')),
     created_at TEXT NOT NULL
 );
 
@@ -525,7 +457,7 @@ pub fn create_tray(app: &tauri::AppHandle) -> Result<(), AppError>;
 3. 设置提示文字（"SnapTranslate"）
 4. 构建菜单项：
    - "框选截图翻译  Ctrl+Alt+L" -> 触发截图
-  - "从剪贴板贴图  Ctrl+Alt+P" -> 触发贴图
+   - "从剪贴板贴图  Ctrl+Alt+P" -> 触发贴图
    - Separator
    - "翻译最近一张贴图" -> 翻译最近贴图
    - "截图与翻译历史" -> 打开历史面板
@@ -600,29 +532,22 @@ pub fn create_history_window(app: &tauri::AppHandle) -> Result<Window, AppError>
 
 ## 3. 前端模块详细设计
 
-### 3.1 PinWindow.vue 贴图窗口组件
+### 3.1 PinView.vue 贴图窗口组件
 
 #### 3.1.1 组件职责
 
 显示截图图像、控制栏按钮、译文覆盖标签，处理拖拽移动与双击关闭。
 
-#### 3.1.2 Props 与状态
+#### 3.1.2 状态
 
 ```typescript
-const props = defineProps<{
-  pinId: string
-}>()
-
 const state = reactive({
   imageDataUrl: '',
   position: { x: 0, y: 0 },
   size: { width: 0, height: 0 },
   translateStatus: 'idle' as 'idle' | 'translating' | 'done' | 'error',
-  translateMode: 'ocr' as 'ocr' | 'multimodal',
   ocrBlocks: [] as TranslatedBlock[],
-  multimodalText: '',
   showOriginal: false,
-  showTransPanel: false,
   errorMessage: '',
 })
 ```
@@ -634,8 +559,8 @@ const state = reactive({
   <div class="image-area" ref="imageArea">
     <img :src="state.imageDataUrl" class="pin-image" draggable="false" />
 
-    <!-- OCR 模式译文标签 -->
-    <template v-if="state.translateMode === 'ocr' && !state.showOriginal">
+    <!-- 译文标签 -->
+    <template v-if="!state.showOriginal">
       <TransLabel
         v-for="(block, index) in state.ocrBlocks"
         :key="index"
@@ -647,13 +572,11 @@ const state = reactive({
 
   <ControlBar
     :translate-status="state.translateStatus"
-    :translate-mode="state.translateMode"
     :show-original="state.showOriginal"
-    :has-translation="state.ocrBlocks.length > 0 || !!state.multimodalText"
+    :has-translation="state.ocrBlocks.length > 0"
     @translate="onTranslate"
     @copy-all="onCopyAll"
     @toggle-original="onToggleOriginal"
-    @open-trans-panel="onOpenTransPanel"
   />
 </div>
 ```
@@ -665,25 +588,11 @@ async function onTranslate() {
   state.translateStatus = 'translating'
   try {
     const config = await invoke('get_config')
-    if (config.default_mode === 'ocr') {
-      const ocrResult = await invoke('ocr_recognize', {
-        imageData: extractBase64(state.imageDataUrl),
-        lang: detectOcrLang(config.target_language),
-      })
-      const translateResult = await invoke('translate_ocr', {
-        blocks: ocrResult.blocks,
-        targetLang: config.target_language,
-      })
-      state.ocrBlocks = translateResult.blocks
-      state.translateMode = 'ocr'
-    } else {
-      const result = await invoke('translate_multimodal', {
-        imageData: extractBase64(state.imageDataUrl),
-        targetLang: config.target_language,
-      })
-      state.multimodalText = result.full_text
-      state.translateMode = 'multimodal'
-    }
+    const result = await invoke('translate_image', {
+      imageData: extractBase64(state.imageDataUrl),
+      targetLanguage: config.target_language,
+    })
+    state.ocrBlocks = result.blocks
     state.translateStatus = 'done'
   } catch (e) {
     state.translateStatus = 'error'
@@ -723,22 +632,17 @@ async function onLabelClick(block: TranslatedBlock) {
 
 async function onCopyAll() {
   const allText = state.ocrBlocks.map(b => b.translated).join('\n')
-    || state.multimodalText
   await invoke('write_clipboard_text', { text: allText })
 }
 
 function onToggleOriginal() {
   state.showOriginal = !state.showOriginal
 }
-
-function onOpenTransPanel() {
-  state.showTransPanel = !state.showTransPanel
-}
 ```
 
 ---
 
-### 3.2 Overlay.vue 截图蒙版组件
+### 3.2 OverlayView.vue 截图蒙版组件
 
 #### 3.2.1 组件职责
 
@@ -796,9 +700,10 @@ async function onMouseUp(e: MouseEvent) {
 
   if (width < 5 || height < 5) return
 
-  const imageData = await invoke('capture_region', { x, y, width, height })
+  const imageData = await invoke('capture_region_from_cache', { x, y, width, height })
   await invoke('write_clipboard_image', { imageData })
-  await invoke('create_pin_window', { imageData, x, y, width, height })
+  await invoke('store_pin_image', { imageData })
+  await invoke('create_pin_window', { x, y, width, height })
 
   // 关闭蒙版窗口
   await getCurrentWindow().close()
@@ -873,7 +778,6 @@ defineEmits<{
 ```typescript
 defineProps<{
   translateStatus: 'idle' | 'translating' | 'done' | 'error'
-  translateMode: 'ocr' | 'multimodal'
   showOriginal: boolean
   hasTranslation: boolean
 }>()
@@ -882,7 +786,6 @@ defineEmits<{
   translate: []
   copyAll: []
   toggleOriginal: []
-  openTransPanel: []
 }>()
 ```
 
@@ -900,9 +803,6 @@ defineEmits<{
     <button class="btn" @click="$emit('copyAll')">{{ t('pin.copy_all') }}</button>
     <button class="btn" @click="$emit('toggleOriginal')">
       {{ showOriginal ? t('pin.show_translation') : t('pin.toggle_original') }}
-    </button>
-    <button v-if="translateMode === 'multimodal'" class="btn" @click="$emit('openTransPanel')">
-      {{ t('pin.trans_panel') }}
     </button>
   </template>
 </div>
@@ -958,10 +858,8 @@ defineEmits<{
 |-----------------|-----------|--------------------------------|
 | API 基础地址     | Input     | 必填，合法 URL                 |
 | API 密钥        | Input (password) | 必填，可切换显示/隐藏   |
-| 文本模型名称     | Input     | 必填                           |
-| 图像模型名称     | Input     | 选填                           |
+| 模型名称        | Input     | 必填                           |
 | 目标翻译语言     | Select    | 必填，选项：中文/英文/日文/韩文/法文/德文/西班牙文 |
-| 默认翻译模式     | Radio     | OCR 优先 / 多模态优先          |
 | 截图快捷键       | HotkeyInput | 合法快捷键组合                |
 | 贴图快捷键       | HotkeyInput | 合法快捷键组合                |
 

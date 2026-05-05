@@ -4,6 +4,7 @@
 
 | 文档版本 | 修订日期   | 作者   | 变更说明         |
 |----------|------------|--------|------------------|
+| V1.2     | 2026-05-05 | XuMingKe | 合并翻译模式，统一使用 OCR 翻译流程 |
 | V1.1     | 2026-05-02 | XuMingKe | S2验收标准更新：截图支持右键取消；贴图控制栏去除半透明背景 |
 | V1.0     | 2026-05-02 | XuMingKe | 初始版本         |
 
@@ -17,11 +18,11 @@
 
 ### 1.2 参考文档
 
-- 《SnapTranslate 产品需求文档（PRD）V1.3》
-- 《SnapTranslate 软件需求规格说明书（SRS）V1.0》
-- 《SnapTranslate 系统/架构设计文档 V1.0》
-- 《SnapTranslate 概要设计说明书（HLD）V1.0》
-- 《SnapTranslate 详细设计说明书（DLD）V1.0》
+- 《SnapTranslate 产品需求文档（PRD）V1.6》
+- 《SnapTranslate 软件需求规格说明书（SRS）V1.2》
+- 《SnapTranslate 系统/架构设计文档 V1.2》
+- 《SnapTranslate 概要设计说明书（HLD）V1.2》
+- 《SnapTranslate 详细设计说明书（DLD）V1.2》
 
 ---
 
@@ -29,12 +30,12 @@
 
 ### 2.1 总体开发模型
 
-采用 **迭代增量模型**，将项目划分为 6 个迭代周期。每个迭代包含需求确认、设计、编码、测试、评审五个阶段，迭代结束时产出可运行的增量版本。
+采用 **迭代增量模型**，将项目划分为 5 个迭代周期。每个迭代包含需求确认、设计、编码、测试、评审五个阶段，迭代结束时产出可运行的增量版本。
 
 ```
 迭代1 (基础骨架)  -->  迭代2 (截图贴图)  -->  迭代3 (OCR翻译)
-                                                    |
-迭代6 (发布上线)  <--  迭代5 (历史/国际化)  <--  迭代4 (多模态/配置)
+                                                  |
+迭代5 (发布上线)  <--  迭代4 (历史/国际化)  <--  迭代4 (配置)
 ```
 
 ### 2.2 单次迭代流程
@@ -65,9 +66,9 @@ main (稳定发布分支)
         +-- feature/skeleton        (迭代1)
         +-- feature/capture-pin     (迭代2)
         +-- feature/ocr-translate   (迭代3)
-        +-- feature/multimodal      (迭代4)
-        +-- feature/history-i18n    (迭代5)
-        +-- feature/release-polish  (迭代6)
+        +-- feature/config          (迭代4)
+        +-- feature/history-i18n    (迭代4)
+        +-- feature/release-polish  (迭代5)
 ```
 
 - **main**：仅合并经过完整测试的稳定版本，对应正式发布。
@@ -105,10 +106,9 @@ refactor(translate): 抽象 API 客户端以支持多种模型格式
 |------|---------------|---------------------------------------------|-------------------------------|
 | S1   | 基础骨架       | 项目初始化、Tauri 应用壳、系统托盘、窗口管理框架 | 可启动的空壳应用              |
 | S2   | 截图与贴图     | 截图蒙版、框选、原位贴图、剪贴板贴图、快捷键    | 可截图贴图的基础工具          |
-| S3   | OCR 翻译      | 本地 OCR、文本大模型翻译、译文覆盖标签          | 可 OCR 翻译的完整工具         |
-| S4   | 多模态与配置   | 多模态翻译、设置界面、密钥安全存储、连接测试     | 双模式翻译 + 完整配置         |
-| S5   | 历史与国际化   | 翻译历史、国际化、快捷键自定义                  | 功能完整的国际化版本          |
-| S6   | 发布打磨       | 性能优化、跨平台适配、打包发布、文档完善         | 可发布的正式版本              |
+| S3   | OCR 翻译      | 本地 OCR、大模型翻译、译文覆盖标签             | 可 OCR 翻译的完整工具         |
+| S4   | 配置与历史     | 设置界面、密钥安全存储、翻译历史、国际化        | 功能完整的国际化版本          |
+| S5   | 发布打磨       | 性能优化、跨平台适配、打包发布、文档完善         | 可发布的正式版本              |
 
 ---
 
@@ -177,7 +177,7 @@ refactor(translate): 抽象 API 客户端以支持多种模型格式
 
 ### 3.4 迭代 S3：OCR 翻译
 
-**目标**：实现本地 OCR 文字识别、文本大模型翻译、译文覆盖标签展示。
+**目标**：实现本地 OCR 文字识别、大模型翻译、译文覆盖标签展示。
 
 #### 任务分解
 
@@ -211,67 +211,44 @@ refactor(translate): 抽象 API 客户端以支持多种模型格式
 
 ---
 
-### 3.5 迭代 S4：多模态与配置
+### 3.5 迭代 S4：配置与历史
 
-**目标**：实现多模态翻译、设置界面、API 密钥安全存储、连接测试。
+**目标**：实现设置界面、API 密钥安全存储、翻译历史、国际化。
 
 #### 任务分解
 
 | 编号     | 任务                                         | 前置依赖  | 产出文件                                          |
 |---------|----------------------------------------------|----------|---------------------------------------------------|
-| S4-T01  | 实现 translate::translate_multimodal          | S3-T02   | src-tauri/src/translate/client.rs 更新             |
-| S4-T02  | 实现 config::secure（密钥安全存储）           | S1-T08   | src-tauri/src/config/secure.rs                     |
-| S4-T03  | 实现 test_api_connection 命令                 | S3-T02   | src-tauri/src/translate/client.rs 更新             |
-| S4-T04  | 前端 TransPanel.vue（译文浮动面板）           | S3-T06   | src/components/TransPanel.vue                      |
-| S4-T05  | PinWindow.vue 集成多模态翻译流程              | S4-T01, S4-T04 | PinWindow.vue 更新                          |
-| S4-T06  | 译文面板"合并到贴图"功能                      | S4-T04   | TransPanel.vue 更新                                |
-| S4-T07  | 前端 SettingsView.vue（设置页面）             | S1-T08   | src/views/SettingsView.vue                         |
-| S4-T08  | 设置页面表单验证与保存逻辑                    | S4-T07   | SettingsView.vue 更新                              |
-| S4-T09  | 密钥安全输入（掩码/显示切换）                 | S4-T02, S4-T07 | SettingsView.vue 更新                        |
-| S4-T10  | 连接测试按钮功能                              | S4-T03, S4-T07 | SettingsView.vue 更新                        |
-| S4-T11  | 首次未配置 API 时引导至设置                   | S4-T07   | PinWindow.vue 更新                                 |
-| S4-T12  | 单元测试：config 模块（含安全存储）           | S4-T02   | tests/                                             |
-| S4-T13  | 单元测试：translate 模块多模态路径            | S4-T01   | tests/                                             |
-| S4-T14  | 集成测试：多模态翻译 + 设置完整流程           | S4-T05   | tests/                                             |
+| S4-T01  | 实现 config::secure（密钥安全存储）           | S1-T08   | src-tauri/src/config/secure.rs                     |
+| S4-T02  | 实现 test_api_connection 命令                 | S3-T02   | src-tauri/src/translate/client.rs 更新             |
+| S4-T03  | 前端 SettingsView.vue（设置页面）             | S1-T08   | src/views/SettingsView.vue                         |
+| S4-T04  | 设置页面表单验证与保存逻辑                    | S4-T03   | SettingsView.vue 更新                              |
+| S4-T05  | 密钥安全输入（掩码/显示切换）                 | S4-T01, S4-T03 | SettingsView.vue 更新                        |
+| S4-T06  | 连接测试按钮功能                              | S4-T02, S4-T03 | SettingsView.vue 更新                        |
+| S4-T07  | 首次未配置 API 时引导至设置                   | S4-T03   | PinWindow.vue 更新                                 |
+| S4-T08  | 实现 history 模块（SQLite 初始化 + CRUD）      | S1-T05   | src-tauri/src/history/mod.rs, db.rs                |
+| S4-T09  | 实现 history::thumbnail（缩略图生成）          | S4-T08   | src-tauri/src/history/thumbnail.rs                 |
+| S4-T10  | 翻译完成后自动写入历史                        | S4-T08, S3-T06 | commands.rs / translate 流程更新             |
+| S4-T11  | 前端 HistoryView.vue（历史面板）              | S4-T08   | src/views/HistoryView.vue                          |
+| S4-T12  | 前端 HistoryItem.vue（历史条目组件）           | S4-T11   | src/components/HistoryItem.vue                     |
+| S4-T13  | 历史详情查看与复制                            | S4-T11   | HistoryView.vue 更新                               |
+| S4-T14  | 历史逐条删除与清空全部                         | S4-T11   | HistoryView.vue 更新                               |
+| S4-T15  | 剪贴板贴图不产生历史记录（验证）               | S4-T10   | 逻辑验证                                           |
+| S4-T16  | 实现 i18n 中文语言包                           | S1-T02   | src/i18n/zh-CN.ts                                  |
+| S4-T17  | 实现 i18n 英文语言包                           | S1-T02   | src/i18n/en-US.ts                                  |
+| S4-T18  | 界面语言自动跟随系统                           | S4-T16, S4-T17 | i18n 配置更新                                |
+| S4-T19  | 所有前端组件接入 i18n                          | S4-T16   | 各组件更新                                         |
+| S4-T20  | 快捷键自定义功能                              | S2-T03, S4-T03 | hotkey 模块 + SettingsView 更新              |
+| S4-T21  | 单元测试：config 模块（含安全存储）           | S4-T01   | tests/                                             |
+| S4-T22  | 单元测试：history 模块                        | S4-T08   | tests/                                             |
+| S4-T23  | 集成测试：设置 + 历史完整流程                 | S4-T03   | tests/                                             |
 
 #### 验收标准
 
-- [x] 多模态翻译完成后不自动弹出面板，控制栏出现"译文面板"按钮
-- [x] 译文面板可拖拽、可关闭、可重新打开
-- [x] "合并到贴图"功能正常
 - [x] 设置页面可正确保存/读取所有配置项
 - [x] API 密钥不在配置文件中明文存储
 - [x] 连接测试反馈明确（成功/认证失败/超时等）
 - [x] 未配置 API 时点击翻译引导至设置
-
----
-
-### 3.6 迭代 S5：历史与国际化
-
-**目标**：实现翻译历史管理、界面国际化、快捷键自定义。
-
-#### 任务分解
-
-| 编号     | 任务                                         | 前置依赖  | 产出文件                                          |
-|---------|----------------------------------------------|----------|---------------------------------------------------|
-| S5-T01  | 实现 history 模块（SQLite 初始化 + CRUD）      | S1-T05   | src-tauri/src/history/mod.rs, db.rs                |
-| S5-T02  | 实现 history::thumbnail（缩略图生成）          | S5-T01   | src-tauri/src/history/thumbnail.rs                 |
-| S5-T03  | 翻译完成后自动写入历史                        | S5-T01, S3-T06 | commands.rs / translate 流程更新             |
-| S5-T04  | 前端 HistoryView.vue（历史面板）              | S5-T01   | src/views/HistoryView.vue                          |
-| S5-T05  | 前端 HistoryItem.vue（历史条目组件）           | S5-T04   | src/components/HistoryItem.vue                     |
-| S5-T06  | 历史详情查看与复制                            | S5-T04   | HistoryView.vue 更新                               |
-| S5-T07  | 历史逐条删除与清空全部                         | S5-T04   | HistoryView.vue 更新                               |
-| S5-T08  | 剪贴板贴图不产生历史记录（验证）               | S5-T03   | 逻辑验证                                           |
-| S5-T09  | 实现 i18n 中文语言包                           | S1-T02   | src/i18n/zh-CN.ts                                  |
-| S5-T10  | 实现 i18n 英文语言包                           | S1-T02   | src/i18n/en-US.ts                                  |
-| S5-T11  | 界面语言自动跟随系统                           | S5-T09, S5-T10 | i18n 配置更新                                |
-| S5-T12  | 所有前端组件接入 i18n                          | S5-T09   | 各组件更新                                         |
-| S5-T13  | 快捷键自定义功能                              | S2-T03, S4-T07 | hotkey 模块 + SettingsView 更新              |
-| S5-T14  | 单元测试：history 模块                        | S5-T01   | tests/                                             |
-| S5-T15  | 集成测试：历史记录完整流程                    | S5-T04   | tests/                                             |
-
-#### 验收标准
-
 - [x] 截图翻译完成后自动生成历史记录
 - [x] 历史面板可查看最近 50 条记录
 - [x] 支持逐条删除和清空全部
@@ -281,7 +258,7 @@ refactor(translate): 抽象 API 客户端以支持多种模型格式
 
 ---
 
-### 3.7 迭代 S6：发布打磨
+### 3.6 迭代 S5：发布打磨
 
 **目标**：性能优化、跨平台适配、打包发布、文档完善。
 
@@ -289,19 +266,19 @@ refactor(translate): 抽象 API 客户端以支持多种模型格式
 
 | 编号     | 任务                                         | 前置依赖  | 产出文件                                          |
 |---------|----------------------------------------------|----------|---------------------------------------------------|
-| S6-T01  | 性能优化：截图响应延迟 < 100ms                | S2-T09   | capture 模块优化                                   |
-| S6-T02  | 性能优化：多贴图内存占用控制                  | S2-T07   | PinWindow 优化                                     |
-| S6-T03  | 性能优化：OCR 识别耗时 < 0.5s                 | S3-T01   | ocr 模块优化                                       |
-| S6-T04  | 日志系统实现                                  | S1-T05   | src-tauri/src/logging/                             |
-| S6-T05  | Windows 平台适配与测试                        | 全部     | 测试报告                                           |
-| S6-T06  | macOS 平台适配与测试                          | 全部     | 测试报告                                           |
-| S6-T07  | Linux 平台适配与测试（X11 + Wayland）         | 全部     | 测试报告                                           |
-| S6-T08  | Windows NSIS 安装包打包                       | S6-T05   | 安装包产物                                         |
-| S6-T09  | macOS DMG 打包                                | S6-T06   | 安装包产物                                         |
-| S6-T10  | Linux AppImage 打包                           | S6-T07   | 安装包产物                                         |
-| S6-T11  | 安全审计：密钥存储、通信加密、无遥测验证       | S4-T02   | 安全审计报告                                       |
-| S6-T12  | 全量回归测试                                  | 全部     | 测试报告                                           |
-| S6-T13  | 用户文档完善                                  | 全部     | README 更新                                        |
+| S5-T01  | 性能优化：截图响应延迟 < 100ms                | S2-T09   | capture 模块优化                                   |
+| S5-T02  | 性能优化：多贴图内存占用控制                  | S2-T07   | PinWindow 优化                                     |
+| S5-T03  | 性能优化：OCR 识别耗时 < 0.5s                 | S3-T01   | ocr 模块优化                                       |
+| S5-T04  | 日志系统实现                                  | S1-T05   | src-tauri/src/logging/                             |
+| S5-T05  | Windows 平台适配与测试                        | 全部     | 测试报告                                           |
+| S5-T06  | macOS 平台适配与测试                          | 全部     | 测试报告                                           |
+| S5-T07  | Linux 平台适配与测试（X11 + Wayland）         | 全部     | 测试报告                                           |
+| S5-T08  | Windows NSIS 安装包打包                       | S5-T05   | 安装包产物                                         |
+| S5-T09  | macOS DMG 打包                                | S5-T06   | 安装包产物                                         |
+| S5-T10  | Linux AppImage 打包                           | S5-T07   | 安装包产物                                         |
+| S5-T11  | 安全审计：密钥存储、通信加密、无遥测验证       | S4-T01   | 安全审计报告                                       |
+| S5-T12  | 全量回归测试                                  | 全部     | 测试报告                                           |
+| S5-T13  | 用户文档完善                                  | 全部     | README 更新                                        |
 
 #### 验收标准
 
@@ -339,19 +316,15 @@ S1 (基础骨架)
  |     |-- TransLabel.vue -------> 依赖 PinWindow
  |     |-- 翻译流程联调 ---------> 依赖 ocr + translate + PinWindow
  |
- +-- S4 (多模态/配置)
- |     |-- translate multimodal -> 依赖 S3 translate
+ +-- S4 (配置/历史)
  |     |-- config secure --------> 依赖 S1 config
- |     |-- TransPanel.vue -------> 依赖 S3 PinWindow
  |     |-- SettingsView.vue -----> 依赖 S1 config + S4 secure
- |
- +-- S5 (历史/国际化)
  |     |-- history 模块 ---------> 依赖 S1 error
  |     |-- HistoryView.vue ------> 依赖 history
  |     |-- i18n -----------------> 依赖 S1 框架
  |     |-- 快捷键自定义 ----------> 依赖 S2 hotkey + S4 SettingsView
  |
- +-- S6 (发布打磨)
+ +-- S5 (发布打磨)
        |-- 性能优化 -------------> 依赖 S2 capture + S3 ocr
        |-- 跨平台适配 -----------> 依赖全部模块
        |-- 打包发布 -------------> 依赖全部模块
@@ -366,9 +339,7 @@ S2-T06 (Overlay.vue) <--------------------------------------------------+
      |
 S2-T07 (PinWindow.vue) --> S3-T05 (TransLabel) --> S3-T06 (OCR翻译集成)
                                                         |
-S4-T01 (multimodal) --> S4-T05 (多模态集成) -------------+
-     |
-S4-T07 (SettingsView) --> S5-T13 (快捷键自定义)
+S4-T03 (SettingsView) --> S4-T20 (快捷键自定义) ---------+
 ```
 
 ---
@@ -380,9 +351,8 @@ S4-T07 (SettingsView) --> S5-T13 (快捷键自定义)
 | M1 骨架  | S1      | 可启动的空壳应用，托盘菜单可用            | 应用启动正常，托盘显示，菜单可点击      |
 | M2 截图  | S2      | 可截图贴图的基础工具                      | 截图->贴图->拖拽->关闭 完整流程可用     |
 | M3 翻译  | S3      | 可 OCR 翻译的完整工具                     | OCR 识别+翻译+覆盖标签 完整流程可用     |
-| M4 配置  | S4      | 双模式翻译 + 完整配置管理                 | 多模态翻译+设置+密钥存储 完整可用       |
-| M5 功能完整| S5    | 功能完整的国际化版本                      | 历史+国际化+快捷键自定义 完整可用       |
-| M6 发布  | S6      | 三平台安装包                              | 全部验收标准通过                        |
+| M4 功能完整| S4    | 功能完整的国际化版本                      | 设置+历史+国际化+快捷键自定义 完整可用  |
+| M5 发布  | S5      | 三平台安装包                              | 全部验收标准通过                        |
 
 ---
 
@@ -392,10 +362,10 @@ S4-T07 (SettingsView) --> S5-T13 (快捷键自定义)
 
 | 风险编号 | 风险描述                                       | 影响迭代 | 概率 | 缓解措施                                               |
 |---------|------------------------------------------------|---------|------|-------------------------------------------------------|
-| R-01    | Wayland 下截图权限受限导致功能不可用             | S2, S6  | 中   | S2 阶段提前在 Wayland 环境验证；提供 X11 回退方案       |
+| R-01    | Wayland 下截图权限受限导致功能不可用             | S2, S5  | 中   | S2 阶段提前在 Wayland 环境验证；提供 X11 回退方案       |
 | R-02    | Tesseract 在 Windows 下编译/链接困难            | S3      | 高   | S3 初期优先验证 leptess 在 Windows 上的编译；准备 tesseract-rs 静态编译备选方案 |
 | R-03    | Tauri 2.x 透明窗口在某些 Linux WM 上渲染异常    | S2      | 中   | S2 阶段在多款 WM 上测试（GNOME/KDE/Sway）；准备不透明回退样式 |
-| R-04    | 大模型 API 响应格式不统一导致解析失败            | S3, S4  | 中   | 默认适配 OpenAI 格式；提供可配置的响应解析模板          |
+| R-04    | 大模型 API 响应格式不统一导致解析失败            | S3      | 中   | 默认适配 OpenAI 格式；提供可配置的响应解析模板          |
 | R-05    | 全局快捷键在 macOS 上需辅助功能权限             | S2      | 低   | 文档中说明授权步骤；首次使用时引导授权                  |
 
 ### 6.2 进度风险
@@ -403,8 +373,8 @@ S4-T07 (SettingsView) --> S5-T13 (快捷键自定义)
 | 风险编号 | 风险描述                     | 缓解措施                                         |
 |---------|------------------------------|--------------------------------------------------|
 | R-06    | OCR 模块集成耗时超预期       | S3 拆分为核心识别 + 坐标提取两步，优先保证核心可用 |
-| R-07    | 跨平台适配工作量超预期       | S6 阶段优先保证 Windows 平台质量，macOS/Linux 可延后 |
-| R-08    | Tesseract 语言数据打包体积过大| S6 阶段评估按需下载语言包方案                     |
+| R-07    | 跨平台适配工作量超预期       | S5 阶段优先保证 Windows 平台质量，macOS/Linux 可延后 |
+| R-08    | Tesseract 语言数据打包体积过大| S5 阶段评估按需下载语言包方案                     |
 
 ---
 

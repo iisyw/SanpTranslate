@@ -4,6 +4,7 @@
 
 | 文档版本 | 修订日期   | 作者   | 变更说明         |
 |----------|------------|--------|------------------|
+| V1.2     | 2026-05-05 | XuMingKe | 合并翻译模式，统一使用 OCR 翻译流程 |
 | V1.1     | 2026-05-02 | XuMingKe | 截图蒙版支持右键取消；贴图控制栏去除半透明背景 |
 | V1.0     | 2026-05-02 | XuMingKe | 初始版本         |
 
@@ -17,8 +18,8 @@
 
 ### 1.2 参考文档
 
-- 《SnapTranslate 软件需求规格说明书（SRS）V1.0》
-- 《SnapTranslate 系统/架构设计文档 V1.0》
+- 《SnapTranslate 软件需求规格说明书（SRS）V1.2》
+- 《SnapTranslate 系统/架构设计文档 V1.2》
 
 ---
 
@@ -33,7 +34,6 @@ SnapTranslate/
   |     |     |-- PinWindow.vue     # 贴图窗口组件
   |     |     |-- Overlay.vue       # 截图蒙版组件
   |     |     |-- TransLabel.vue    # 译文标签组件
-  |     |     |-- TransPanel.vue    # 译文面板组件
   |     |     |-- ControlBar.vue    # 控制栏组件
   |     |     |-- HistoryItem.vue   # 历史条目组件
   |     |-- views/                  # 页面视图
@@ -59,24 +59,16 @@ SnapTranslate/
   |     |     |-- main.rs           # 可执行入口
   |     |     |-- capture/          # 截图模块
   |     |     |     |-- mod.rs
-  |     |     |     |-- screen.rs   # 屏幕捕获逻辑
   |     |     |-- ocr/              # OCR 模块
   |     |     |     |-- mod.rs
-  |     |     |     |-- engine.rs   # Tesseract 引擎封装
-  |     |     |     |-- models.rs   # OCR 结果数据结构
   |     |     |-- translate/        # 翻译模块
   |     |     |     |-- mod.rs
-  |     |     |     |-- client.rs   # API 客户端
-  |     |     |     |-- prompt.rs   # Prompt 构造
-  |     |     |     |-- parser.rs   # 响应解析
   |     |     |-- config/           # 配置模块
   |     |     |     |-- mod.rs
   |     |     |     |-- manager.rs  # 配置读写
-  |     |     |     |-- secure.rs   # 密钥安全存储
   |     |     |-- history/          # 历史模块
   |     |     |     |-- mod.rs
   |     |     |     |-- db.rs       # SQLite 操作
-  |     |     |     |-- thumbnail.rs # 缩略图生成
   |     |     |-- clipboard/        # 剪贴板模块
   |     |     |     |-- mod.rs
   |     |     |-- hotkey/           # 快捷键模块
@@ -85,8 +77,6 @@ SnapTranslate/
   |     |     |     |-- mod.rs
   |     |     |-- window/           # 窗口管理模块
   |     |     |     |-- mod.rs
-  |     |     |     |-- pin.rs      # 贴图窗口管理
-  |     |     |     |-- overlay.rs  # 蒙版窗口管理
   |     |     |-- error.rs          # 统一错误类型
   |     |     |-- commands.rs       # Tauri Command 注册
   |     |-- Cargo.toml
@@ -140,15 +130,6 @@ pub struct OcrResult {
 #### 3.1.3 翻译结果
 
 ```rust
-pub enum TranslateMode {
-    Ocr,
-    Multimodal,
-}
-
-pub struct OcrTranslateResult {
-    pub blocks: Vec<TranslatedBlock>,
-}
-
 pub struct TranslatedBlock {
     pub original: String,
     pub translated: String,
@@ -158,14 +139,8 @@ pub struct TranslatedBlock {
     pub height: u32,
 }
 
-pub struct MultimodalTranslateResult {
-    pub full_text: String,
-}
-
 pub struct TranslateResult {
-    pub mode: TranslateMode,
-    pub ocr_result: Option<OcrTranslateResult>,
-    pub multimodal_result: Option<MultimodalTranslateResult>,
+    pub blocks: Vec<TranslatedBlock>,
 }
 ```
 
@@ -174,10 +149,8 @@ pub struct TranslateResult {
 ```rust
 pub struct AppConfig {
     pub api_base_url: String,
-    pub text_model: String,
-    pub vision_model: Option<String>,
+    pub model: String,
     pub target_language: String,
-    pub default_mode: TranslateMode,
     pub shortcuts: ShortcutConfig,
 }
 
@@ -195,7 +168,6 @@ pub struct HistoryEntry {
     pub thumbnail: Vec<u8>,
     pub ocr_text: Option<String>,
     pub translated_text: String,
-    pub mode: TranslateMode,
     pub created_at: String,
 }
 ```
@@ -225,11 +197,8 @@ interface PinState {
   position: { x: number; y: number }
   size: { width: number; height: number }
   translateStatus: 'idle' | 'translating' | 'done' | 'error'
-  translateMode: 'ocr' | 'multimodal'
   ocrBlocks: TranslatedBlock[]
-  multimodalText: string
   showOriginal: boolean
-  showTransPanel: boolean
 }
 ```
 
@@ -271,9 +240,8 @@ interface TranslatedBlock {
 
 | 命令名                    | 参数                                       | 返回值             | 说明                     |
 |--------------------------|--------------------------------------------|--------------------|--------------------------|
-| `translate_ocr`          | `{ blocks: Vec<OcrTextBlock>, target_lang: String }` | `OcrTranslateResult` | OCR 模式翻译 |
-| `translate_multimodal`   | `{ image_data: String, target_lang: String }` | `MultimodalTranslateResult` | 多模态模式翻译 |
-| `test_api_connection`    | `{ config: AppConfig }`                    | `{ success: bool, message: String }` | 测试 API 连接 |
+| `translate_image`        | `{ image_data: String, target_language: String }` | `TranslateResult` | OCR 翻译 |
+| `test_api_connection`    | `{ api_base_url: String, api_key: String, model: String }` | `String` | 测试 API 连接 |
 
 #### 4.1.4 配置相关
 
@@ -282,7 +250,7 @@ interface TranslatedBlock {
 | `get_config`     | 无                   | `AppConfig`   | 读取配置            |
 | `save_config`    | `{ config: AppConfig }` | `{ success: bool }` | 保存配置 |
 | `get_api_key`    | 无                   | `String`      | 从凭据管理器读取密钥 |
-| `save_api_key`   | `{ key: String }`    | `{ success: bool }` | 保存密钥到凭据管理器 |
+| `set_api_key`    | `{ key: String }`    | `{ success: bool }` | 保存密钥到凭据管理器 |
 
 #### 4.1.5 历史相关
 
@@ -308,17 +276,6 @@ interface TranslatedBlock {
 | `create_pin_window`| `{ image_data: String, x: i32, y: i32, w: u32, h: u32 }` | `{ window_id: String }` | 创建贴图窗口 |
 | `close_pin_window` | `{ window_id: String }`                 | `{ success: bool }` | 关闭贴图窗口 |
 
-### 4.2 Tauri Event 接口
-
-以下为后端向前端推送的事件。
-
-| 事件名                  | 载荷（Payload）                                    | 说明               |
-|------------------------|---------------------------------------------------|--------------------|
-| `translate-progress`   | `{ pin_id: String, status: String }`              | 翻译进度通知       |
-| `translate-result`     | `{ pin_id: String, result: TranslateResult }`     | 翻译结果推送       |
-| `translate-error`      | `{ pin_id: String, error: String }`               | 翻译错误通知       |
-| `shortcut-triggered`   | `{ shortcut: String }`                            | 快捷键触发通知     |
-
 ---
 
 ## 5. 核心流程概要设计
@@ -331,7 +288,7 @@ interface TranslatedBlock {
 3. 调用 window::create_overlay_window() 创建蒙版窗口
 4. 前端 Overlay.vue 绘制蒙版，监听鼠标事件
 5. 用户拖拽选区，前端实时绘制选区矩形
-6. 用户松开鼠标，前端调用 capture_region 命令
+6. 用户松开鼠标，前端调用 capture_region_from_cache 命令
 7. capture 模块裁剪选区图像，返回 Base64
 8. clipboard 模块将图像写入系统剪贴板
 9. window 模块创建贴图窗口（原位）
@@ -343,29 +300,16 @@ interface TranslatedBlock {
 ### 5.2 OCR 翻译流程
 
 ```
-1. 前端调用 ocr_recognize 命令，传入图像数据
-2. ocr 模块在独立线程执行 Tesseract 识别
+1. 前端调用 translate_image 命令，传入图像数据和目标语言
+2. translate 模块调用 ocr 模块执行 Tesseract 识别
 3. 返回 OcrResult（含文本块及坐标）
-4. 前端调用 translate_ocr 命令，传入文本块
-5. translate 模块构造 Prompt，调用文本大模型 API
-6. 解析 API 响应，映射译文到各文本块
-7. 通过 emit("translate-result") 推送结果到前端
-8. 前端渲染译文覆盖标签
+4. translate 模块构造 Prompt，调用大模型 API
+5. 解析 API 响应，映射译文到各文本块
+6. 返回 TranslateResult（含翻译块列表）
+7. 前端渲染译文覆盖标签
 ```
 
-### 5.3 多模态翻译流程
-
-```
-1. 前端调用 translate_multimodal 命令，传入图像数据
-2. translate 模块将图像编码为 Base64
-3. 构造多模态 API 请求（含图像和翻译指令）
-4. 调用视觉大模型 API
-5. 解析响应，提取整体翻译文本
-6. 通过 emit("translate-result") 推送结果到前端
-7. 前端显示"译文面板"按钮
-```
-
-### 5.4 剪贴板贴图流程
+### 5.3 剪贴板贴图流程
 
 ```
 1. hotkey 模块检测到 Ctrl+Alt+P
@@ -389,7 +333,6 @@ interface TranslatedBlock {
 | thumbnail       | BLOB       | NOT NULL          | 缩略图数据         |
 | ocr_text        | TEXT       | NULL              | OCR 识别原文       |
 | translated_text | TEXT       | NOT NULL          | 翻译后文本         |
-| translate_mode  | TEXT       | NOT NULL          | 翻译模式（ocr/multimodal）|
 | created_at      | TEXT       | NOT NULL          | ISO 8601 时间戳    |
 
 #### 索引
@@ -407,10 +350,8 @@ CREATE INDEX idx_history_created_at ON history(created_at DESC);
 ```toml
 [api]
 base_url = "https://api.example.com/v1"
-text_model = "gpt-4o-mini"
-vision_model = "gpt-4o"
+model = "gpt-4o-mini"
 target_language = "zh-CN"
-default_mode = "ocr"
 
 [shortcuts]
 capture = "Ctrl+Alt+L"
@@ -447,38 +388,6 @@ log_enabled = false
 }
 ```
 
-### 8.2 多模态翻译 API 请求格式
-
-兼容 OpenAI Vision API：
-
-```json
-{
-  "model": "gpt-4o",
-  "messages": [
-    {
-      "role": "system",
-      "content": "你是一个翻译助手。请识别图像中的所有文字，并翻译为{target_language}。"
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "image_url",
-          "image_url": {
-            "url": "data:image/png;base64,{base64_image}"
-          }
-        },
-        {
-          "type": "text",
-          "text": "请翻译图中所有文字为{target_language}。"
-        }
-      ]
-    }
-  ],
-  "temperature": 0.3
-}
-```
-
 ---
 
 ## 9. 国际化设计
@@ -508,7 +417,6 @@ export default {
   'pin.translating': '翻译中...',
   'pin.copy_all': '复制全部',
   'pin.toggle_original': '原文/译文',
-  'pin.trans_panel': '译文面板',
   'pin.copied': '已复制',
   'settings.title': '设置',
   // ...

@@ -11,8 +11,6 @@ export interface HistoryEntry {
   ocr_text: string | null
   /** 翻译结果文本 */
   translated_text: string
-  /** 翻译模式 */
-  translate_mode: 'ocr' | 'multimodal'
   /** 创建时间 */
   created_at: string
 }
