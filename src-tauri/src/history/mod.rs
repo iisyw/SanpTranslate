@@ -20,6 +20,8 @@ const THUMBNAIL_QUALITY: u8 = 80;
 pub struct HistoryEntry {
     /// 记录 ID
     pub id: i64,
+    /// 原图数据（Base64 编码）
+    pub image_data: Option<String>,
     /// 缩略图数据（Base64 编码的 JPEG）
     pub thumbnail: String,
     /// OCR 识别原文
@@ -72,6 +74,7 @@ impl HistoryService {
         db.execute_batch(
             "CREATE TABLE IF NOT EXISTS history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                image_blob BLOB NOT NULL,
                 thumbnail BLOB NOT NULL,
                 ocr_text TEXT,
                 translated_text TEXT NOT NULL,
@@ -81,6 +84,9 @@ impl HistoryService {
             CREATE INDEX IF NOT EXISTS idx_history_created_at ON history(created_at DESC);"
         )?;
 
+        // 兼容旧数据库：若缺少 image_blob 列则添加（SQLite ALTER TABLE 不支持 IF NOT EXISTS）
+        let _ = db.execute("ALTER TABLE history ADD COLUMN image_blob BLOB", []);
+
         log::info!("[HISTORY] 数据库初始化完成: {:?}", db_path);
 
         Ok(HistoryService { db })
@@ -88,6 +94,8 @@ impl HistoryService {
 
     /// 添加一条历史记录
     pub fn add_entry(&self, entry: NewHistoryEntry) -> Result<i64, AppError> {
+        // 原图存储为 Base64
+        let image_base64 = base64::engine::general_purpose::STANDARD.encode(&entry.image_data);
         // 生成缩略图
         let thumbnail_bytes = generate_thumbnail(&entry.image_data)?;
 
@@ -96,8 +104,8 @@ impl HistoryService {
 
         // 插入记录
         self.db.execute(
-            "INSERT INTO history (thumbnail, ocr_text, translated_text, created_at) VALUES (?1, ?2, ?3, ?4)",
-            params![thumbnail_bytes, entry.ocr_text, entry.translated_text, created_at],
+            "INSERT INTO history (image_blob, thumbnail, ocr_text, translated_text, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![image_base64, thumbnail_bytes, entry.ocr_text, entry.translated_text, created_at],
         )?;
 
         let id = self.db.last_insert_rowid();
@@ -142,20 +150,22 @@ impl HistoryService {
     /// 获取单条历史记录详情
     pub fn get_detail(&self, id: i64) -> Result<HistoryEntry, AppError> {
         let mut stmt = self.db.prepare(
-            "SELECT id, thumbnail, ocr_text, translated_text, created_at FROM history WHERE id = ?1"
+            "SELECT id, image_blob, thumbnail, ocr_text, translated_text, created_at FROM history WHERE id = ?1"
         )?;
 
         let entry = stmt.query_row(params![id], |row| {
             let id: i64 = row.get(0)?;
-            let thumbnail_bytes: Vec<u8> = row.get(1)?;
-            let ocr_text: Option<String> = row.get(2)?;
-            let translated_text: String = row.get(3)?;
-            let created_at: String = row.get(4)?;
+            let image_blob: Option<String> = row.get(1)?;
+            let thumbnail_bytes: Vec<u8> = row.get(2)?;
+            let ocr_text: Option<String> = row.get(3)?;
+            let translated_text: String = row.get(4)?;
+            let created_at: String = row.get(5)?;
 
             let thumbnail = base64::engine::general_purpose::STANDARD.encode(&thumbnail_bytes);
 
             Ok(HistoryEntry {
                 id,
+                image_data: image_blob,
                 thumbnail,
                 ocr_text,
                 translated_text,

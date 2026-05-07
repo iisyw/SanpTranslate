@@ -49,8 +49,8 @@
         size="medium"
       >
         <div v-if="historyStore.currentDetail" class="detail-content">
-          <!-- 缩略图 -->
-          <div class="detail-thumbnail-wrapper">
+          <!-- 缩略图（点击放大） -->
+          <div class="detail-thumbnail-wrapper" @click="showImagePreview = true" style="cursor: pointer;">
             <img
               v-if="detailThumbnailUrl"
               :src="detailThumbnailUrl"
@@ -59,15 +59,25 @@
             />
           </div>
 
-          <!-- 原文 -->
+          <!-- 原文（带复制按钮） -->
           <div class="detail-section" v-if="historyStore.currentDetail.ocr_text">
-            <div class="detail-label">{{ t('history.original') }}</div>
+            <div class="detail-label-row">
+              <span class="detail-label">{{ t('history.original') }}</span>
+              <n-button text size="tiny" @click="onCopyDetailOriginal" style="color: rgba(255,255,255,0.5); font-size: 12px;">
+                {{ t('common.copy') }}
+              </n-button>
+            </div>
             <div class="detail-text">{{ historyStore.currentDetail.ocr_text }}</div>
           </div>
 
-          <!-- 译文 -->
+          <!-- 译文（带复制按钮） -->
           <div class="detail-section">
-            <div class="detail-label">{{ t('history.translation') }}</div>
+            <div class="detail-label-row">
+              <span class="detail-label">{{ t('history.translation') }}</span>
+              <n-button text size="tiny" @click="onCopyDetailTranslation" style="color: rgba(255,255,255,0.5); font-size: 12px;">
+                {{ t('common.copy') }}
+              </n-button>
+            </div>
             <div class="detail-text">{{ historyStore.currentDetail.translated_text }}</div>
           </div>
 
@@ -77,10 +87,25 @@
 
         <template #footer>
           <n-space justify="end">
-            <n-button @click="onCopyDetail">{{ t('history.copyTranslation') }}</n-button>
             <n-button type="error" ghost @click="onDeleteDetail">{{ t('common.delete') }}</n-button>
           </n-space>
         </template>
+      </n-modal>
+
+      <!-- 图片放大预览弹窗 -->
+      <n-modal
+        v-model:show="showImagePreview"
+        :style="{ maxWidth: '90vw', maxHeight: '90vh', width: 'auto', padding: '8px' }"
+        :bordered="false"
+        :mask-closable="true"
+        @click="showImagePreview = false"
+      >
+        <img
+          v-if="detailImageUrl"
+          :src="detailImageUrl"
+          style="width: auto; height: auto; max-width: 85vw; max-height: 85vh; object-fit: contain; border-radius: 8px; display: block;"
+          draggable="false"
+        />
       </n-modal>
     </div>
   </n-config-provider>
@@ -100,6 +125,7 @@ import {
 } from 'naive-ui'
 import { useHistoryStore } from '@/stores/historyStore'
 import type { HistoryListItem } from '@/utils/tauri'
+import { writeClipboardText } from '@/utils/tauri'
 import { logger } from '@/utils/logger'
 import HistoryItem from '@/components/HistoryItem.vue'
 
@@ -117,6 +143,8 @@ const historyStore = useHistoryStore()
 
 // 详情弹窗状态
 const showDetail = ref(false)
+// 图片放大预览状态
+const showImagePreview = ref(false)
 
 // 详情缩略图 URL
 const detailThumbnailUrl = computed(() => {
@@ -124,6 +152,15 @@ const detailThumbnailUrl = computed(() => {
     return `data:image/jpeg;base64,${historyStore.currentDetail.thumbnail}`
   }
   return ''
+})
+
+// 详情原图 URL（用于放大预览）
+const detailImageUrl = computed(() => {
+  if (historyStore.currentDetail?.image_data) {
+    return `data:image/png;base64,${historyStore.currentDetail.image_data}`
+  }
+  // 无原图时回退到缩略图（旧数据兼容）
+  return detailThumbnailUrl.value
 })
 
 /** 查看详情 */
@@ -190,15 +227,27 @@ function onClearAll() {
   })
 }
 
-/** 复制详情中的译文 */
-async function onCopyDetail() {
-  if (!historyStore.currentDetail?.translated_text) return
+/** 复制详情中的原文 */
+async function onCopyDetailOriginal() {
+  if (!historyStore.currentDetail?.ocr_text) return
   try {
-    await historyStore.copyTranslation(historyStore.currentDetail.translated_text)
+    await writeClipboardText(historyStore.currentDetail.ocr_text)
     message.success(t('history.copySuccess'))
   } catch (err) {
     message.error(t('history.copyFailed'))
-    logger.error(TAG, `复制失败: ${err}`, err)
+    logger.error(TAG, `复制原文失败: ${err}`, err)
+  }
+}
+
+/** 复制详情中的译文 */
+async function onCopyDetailTranslation() {
+  if (!historyStore.currentDetail?.translated_text) return
+  try {
+    await writeClipboardText(historyStore.currentDetail.translated_text)
+    message.success(t('history.copySuccess'))
+  } catch (err) {
+    message.error(t('history.copyFailed'))
+    logger.error(TAG, `复制译文失败: ${err}`, err)
   }
 }
 
@@ -303,6 +352,12 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.detail-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .detail-label {

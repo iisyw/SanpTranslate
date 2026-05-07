@@ -90,6 +90,8 @@ export interface HistoryListItem {
 export interface HistoryEntry {
   /** 记录 ID */
   id: number
+  /** 原图数据（Base64 编码） */
+  image_data: string | null
   /** 缩略图数据（Base64 编码的 JPEG） */
   thumbnail: string
   /** OCR 识别原文 */

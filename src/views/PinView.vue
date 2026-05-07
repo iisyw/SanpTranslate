@@ -38,7 +38,8 @@
       :has-translation="hasTranslation"
       :error-message="errorMessage"
       @translate="onTranslate"
-      @copy-all="onCopyAll"
+      @copy-original="onCopyOriginal"
+      @copy-translation="onCopyTranslation"
       @toggle-original="onToggleOriginal"
     />
   </div>
@@ -365,15 +366,28 @@ async function onTranslate() {
   }
 }
 
-// 复制全部翻译文本到剪贴板
-async function onCopyAll() {
+// 复制原文文本到剪贴板
+async function onCopyOriginal() {
+  if (filteredBlocks.value.length > 0) {
+    const text = filteredBlocks.value.map(b => b.original).join('\n')
+    try {
+      await writeClipboardText(text)
+      logger.info(TAG, '原文文本已复制到剪贴板')
+    } catch (err) {
+      logger.error(TAG, `复制原文失败: ${err}`, err)
+    }
+  }
+}
+
+// 复制译文文本到剪贴板
+async function onCopyTranslation() {
   if (filteredBlocks.value.length > 0) {
     const text = filteredBlocks.value.map(b => b.translated).join('\n')
     try {
       await writeClipboardText(text)
-      logger.info(TAG, '翻译文本已复制到剪贴板')
+      logger.info(TAG, '译文文本已复制到剪贴板')
     } catch (err) {
-      logger.error(TAG, `复制失败: ${err}`, err)
+      logger.error(TAG, `复制译文失败: ${err}`, err)
     }
   }
 }

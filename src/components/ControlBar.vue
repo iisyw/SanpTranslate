@@ -25,8 +25,11 @@
 
     <!-- done 状态：显示操作按钮组 -->
     <template v-else-if="translateStatus === 'done'">
-      <!-- 复制全部 -->
-      <button class="btn" @click="$emit('copyAll')">{{ t('controlBar.copyAll') }}</button>
+      <!-- 复制原文 -->
+      <button class="btn" @click="$emit('copyOriginal')">{{ t('controlBar.copyOriginal') }}</button>
+
+      <!-- 复制译文 -->
+      <button class="btn" @click="$emit('copyTranslation')">{{ t('controlBar.copyTranslation') }}</button>
 
       <!-- 原文/译文切换 -->
       <button class="btn" @click="$emit('toggleOriginal')">
@@ -58,8 +61,10 @@ defineProps<{
 defineEmits<{
   /** 翻译按钮点击 */
   translate: []
-  /** 复制全部按钮点击 */
-  copyAll: []
+  /** 复制原文按钮点击 */
+  copyOriginal: []
+  /** 复制译文按钮点击 */
+  copyTranslation: []
   /** 原文/译文切换按钮点击 */
   toggleOriginal: []
 }>()
@@ -79,15 +84,15 @@ defineEmits<{
   padding: 4px 12px;
   border: none;
   border-radius: var(--border-radius);
-  background: rgba(255, 255, 255, 0.15);
-  color: var(--color-text-primary);
+  background: #3a3a40;
+  color: #f0f0f0;
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: #4e4e55;
 }
 
 .btn-primary {
