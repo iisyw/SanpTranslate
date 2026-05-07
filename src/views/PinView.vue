@@ -6,29 +6,29 @@
     @mouseup="onMouseUp"
     @dblclick="onDoubleClick"
   >
-    <div class="image-area" ref="imageArea">
-      <img
-        v-if="imageDataUrl"
-        :src="imageDataUrl"
-        class="pin-image"
-        draggable="false"
-        @load="onImageLoad"
-      />
-      <!-- 翻译覆盖层 -->
-      <div v-if="translatedBlocks.length > 0 && !showOriginal" class="translate-overlay">
+    <!-- 内容行：左侧截图 + 右侧译文面板 -->
+    <div class="content-row">
+      <div class="image-area" ref="imageArea">
+        <img
+          v-if="imageDataUrl"
+          :src="imageDataUrl"
+          class="pin-image"
+          draggable="false"
+          @load="onImageLoad"
+        />
+      </div>
+      <!-- 译文面板 -->
+      <div
+        v-if="hasTranslation && !showOriginal"
+        class="translation-panel"
+      >
         <div
-          v-for="(block, index) in translatedBlocks"
+          v-for="(block, index) in filteredBlocks"
           :key="index"
-          class="translate-label"
-          :style="{
-            left: (block.x * 100) + '%',
-            top: (block.y * 100) + '%',
-            width: (block.width * 100) + '%',
-            height: (block.height * 100) + '%',
-          }"
-          :title="block.original"
+          class="translation-item"
         >
-          {{ block.translated }}
+          <div class="translation-text">{{ block.translated }}</div>
+          <div v-if="index < filteredBlocks.length - 1" class="translation-separator"></div>
         </div>
       </div>
     </div>
@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { LogicalSize } from '@tauri-apps/api/dpi'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
@@ -63,6 +63,8 @@ const TAG = 'PinView'
 
 // 阴影内边距，需与后端 window/mod.rs 中的 PIN_PADDING 保持一致
 const PIN_PADDING = 4
+// 译文面板最大宽度
+const MAX_PANEL_WIDTH = 340
 
 type TranslateStatus = 'idle' | 'translating' | 'done' | 'error'
 
@@ -76,8 +78,19 @@ const hasTranslation = ref(false)
 const translatedBlocks = ref<TranslatedBlock[]>([])
 const errorMessage = ref<string>('')
 
+// 过滤掉空翻译的块，避免在译文面板中显示空白项
+const filteredBlocks = computed(() =>
+  translatedBlocks.value.filter(b => b.translated.length > 0)
+)
+
 // 保存原始 base64 数据用于翻译
 let rawBase64Data = ''
+
+// 图片逻辑像素尺寸（用于窗口大小计算）
+let logicalImageWidth = 0
+let logicalImageHeight = 0
+// 译文面板宽度（翻译完成后固定）
+let storedPanelWidth = 0
 
 const imageArea = ref<HTMLElement | null>(null)
 
@@ -86,26 +99,76 @@ let mouseDownY = 0
 let hasStartedDrag = false
 let unlistenTranslate: UnlistenFn | null = null
 
+/** HTML 转义，防止译文内容中出现 HTML 标签破坏布局 */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+/**
+ * 离屏测量译文面板的自然宽度
+ * 创建一个与面板样式相同的隐藏元素，测量其 scrollWidth 以确定内容宽度
+ */
+function measurePanelWidth(blocks: TranslatedBlock[]): number {
+  const el = document.createElement('div')
+  el.style.cssText = `
+    position: fixed; left: -9999px; top: 0;
+    font-size: 13px; line-height: 1.8;
+    padding: 16px; max-width: ${MAX_PANEL_WIDTH}px;
+    width: max-content;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    word-break: break-word; white-space: pre-wrap;
+    color: #f0f0f0;
+  `
+  el.innerHTML = blocks.map((b, i) => {
+    const text = escapeHtml(b.translated)
+    const sep = i < blocks.length - 1
+      ? '<div style="height:1px;margin:10px 0;background:rgba(255,255,255,0.08)"></div>'
+      : ''
+    return `<div style="margin-bottom:4px">${text}${sep}</div>`
+  }).join('')
+
+  document.body.appendChild(el)
+  const w = Math.min(el.scrollWidth, MAX_PANEL_WIDTH)
+  document.body.removeChild(el)
+  return Math.max(w, 80) // 最小宽度 80px
+}
+
+/** 根据当前状态调整窗口大小 */
+async function updateWindowSize(includePanel: boolean) {
+  if (!logicalImageWidth || !logicalImageHeight) return
+
+  const controlBarH = 36
+  let width = logicalImageWidth + PIN_PADDING * 2
+  const height = logicalImageHeight + controlBarH + PIN_PADDING * 2
+
+  if (includePanel && storedPanelWidth > 0) {
+    width += storedPanelWidth
+  }
+
+  try {
+    await getCurrentWindow().setSize(new LogicalSize(width, height))
+    logger.info(TAG, `窗口大小调整: ${width}x${height} (includePanel=${includePanel})`)
+  } catch (err) {
+    logger.error(TAG, `窗口大小调整失败: ${err}`, err)
+  }
+}
+
 async function onImageLoad(event: Event) {
   const img = event.target as HTMLImageElement
   if (!img || !img.naturalWidth || !img.naturalHeight) return
 
   const dpr = window.devicePixelRatio || 1
-  const logicalW = img.naturalWidth / dpr
-  const logicalH = img.naturalHeight / dpr
-  const controlBarH = 36
+  logicalImageWidth = img.naturalWidth / dpr
+  logicalImageHeight = img.naturalHeight / dpr
 
-  logger.info(TAG, `图片加载完成: naturalSize=${img.naturalWidth}x${img.naturalHeight}, dpr=${dpr}, logicalSize=${logicalW}x${logicalH}`)
+  logger.info(TAG, `图片加载完成: naturalSize=${img.naturalWidth}x${img.naturalHeight}, dpr=${dpr}, logicalSize=${logicalImageWidth}x${logicalImageHeight}`)
 
-  try {
-    await getCurrentWindow().setSize(new LogicalSize(
-      logicalW + PIN_PADDING * 2,
-      logicalH + controlBarH + PIN_PADDING * 2
-    ))
-    logger.info(TAG, `窗口大小调整成功: ${logicalW + PIN_PADDING * 2}x${logicalH + controlBarH + PIN_PADDING * 2}`)
-  } catch (err) {
-    logger.error(TAG, `窗口大小调整失败: ${err}`, err)
-  }
+  await updateWindowSize(false)
 }
 
 onMounted(async () => {
@@ -199,12 +262,25 @@ async function onTranslate() {
     // 调用翻译命令
     const result = await translateImage(rawBase64Data, config.target_language)
 
+    if (!result.blocks || result.blocks.length === 0) {
+      logger.info(TAG, '翻译结果为空，回到空闲状态')
+      translateStatus.value = 'idle'
+      return
+    }
+
     // 保存翻译块列表
     translatedBlocks.value = result.blocks
-    logger.info(TAG, `翻译完成，共 ${translatedBlocks.value.length} 个翻译块`)
-
     hasTranslation.value = true
     translateStatus.value = 'done'
+
+    logger.info(TAG, `翻译完成，共 ${translatedBlocks.value.length} 个翻译块`)
+
+    // 在下一帧测量面板宽度并调整窗口大小
+    await nextTick()
+    storedPanelWidth = measurePanelWidth(result.blocks)
+    logger.info(TAG, `译文面板测量宽度: ${storedPanelWidth}px`)
+
+    await updateWindowSize(true)
   } catch (err) {
     errorMessage.value = String(err)
     translateStatus.value = 'error'
@@ -214,8 +290,8 @@ async function onTranslate() {
 
 // 复制全部翻译文本到剪贴板
 async function onCopyAll() {
-  if (translatedBlocks.value.length > 0) {
-    const text = translatedBlocks.value.map(b => b.translated).join('\n')
+  if (filteredBlocks.value.length > 0) {
+    const text = filteredBlocks.value.map(b => b.translated).join('\n')
     try {
       await writeClipboardText(text)
       logger.info(TAG, '翻译文本已复制到剪贴板')
@@ -226,8 +302,11 @@ async function onCopyAll() {
 }
 
 // 切换原文/译文显示
-function onToggleOriginal() {
+async function onToggleOriginal() {
   showOriginal.value = !showOriginal.value
+  // 切换后立即调整窗口大小
+  await nextTick()
+  await updateWindowSize(!showOriginal.value)
 }
 
 onUnmounted(() => {
@@ -249,8 +328,15 @@ onUnmounted(() => {
   user-select: none;
 }
 
-.image-area {
+.content-row {
+  display: flex;
+  flex-direction: row;
   flex: 1;
+  min-height: 0;
+}
+
+.image-area {
+  flex: 0 0 auto;
   overflow: hidden;
   position: relative;
   display: flex;
@@ -267,41 +353,45 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* 翻译覆盖层 */
-.translate-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
+/* 译文面板 */
+.translation-panel {
+  background: rgba(30, 30, 30, 0.92);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 16px;
+  max-width: 340px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #f0f0f0;
 }
 
-/* 单个翻译标签 */
-.translate-label {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  color: #ffffff;
-  font-size: 12px;
-  line-height: 1.2;
-  padding: 1px 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  pointer-events: auto;
-  cursor: default;
+.translation-item {
+  margin-bottom: 4px;
+}
+
+.translation-text {
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* 翻译块之间的分隔线 */
+.translation-separator {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 10px 0;
+}
+
+/* 译文面板滚动条样式 */
+.translation-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.translation-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.translation-panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 2px;
-  transition: background 0.15s;
-}
-
-/* 鼠标悬停时展开显示完整译文 */
-.translate-label:hover {
-  background: rgba(0, 0, 0, 0.9);
-  white-space: normal;
-  word-break: break-all;
-  z-index: 10;
 }
 </style>

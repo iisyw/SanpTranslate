@@ -48,6 +48,7 @@ $RECYCLE.BIN/
 *~
 .trae/
 .claude/
+.github/
 
 # 日志文件
 *.log

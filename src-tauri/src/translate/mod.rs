@@ -63,32 +63,47 @@ async fn translate_ocr_mode(
         return Ok(TranslateResult { blocks: Vec::new() });
     }
 
-    // 拼接所有OCR文字，用换行分隔（每行对应一个行级OCR块）
+    // 拼接所有OCR文字，用空行分隔（每个段落对应一个OCR块）
     let all_text = ocr_blocks
         .iter()
         .map(|b| b.text.as_str())
         .collect::<Vec<_>>()
-        .join("\n");
+        .join("\n\n");
 
-    log::debug!("[TRANSLATE] OCR提取文本（{}行）: {}", ocr_blocks.len(), all_text);
+    log::debug!("[TRANSLATE] OCR提取文本（{}段落）: {}", ocr_blocks.len(), all_text);
 
-    // 调用文本模型翻译，要求按行返回
+    // 调用文本模型翻译，要求按段落返回
     let translated_text = call_text_api(api_base_url, api_key, model, &all_text, target_language).await?;
 
-    // 将翻译结果按行拆分，与OCR块一一对应
-    let translated_lines: Vec<&str> = translated_text.lines().collect();
+    // 将翻译结果按空行(\n\n)拆分为段落，与OCR块一一对应
+    let translated_paragraphs: Vec<&str> = translated_text
+        .split("\n\n")
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
 
-    log::debug!("[TRANSLATE] 翻译结果（{}行）: {}", translated_lines.len(), translated_text);
+    log::debug!("[TRANSLATE] 翻译结果（{}段落）: {}", translated_paragraphs.len(), translated_text);
+
+    // 警告：翻译段落数与OCR块数不匹配的情况
+    if translated_paragraphs.len() != ocr_blocks.len() {
+        log::warn!(
+            "[TRANSLATE] 翻译段落数({})与OCR块数({})不匹配",
+            translated_paragraphs.len(),
+            ocr_blocks.len()
+        );
+    }
 
     let translated_blocks: Vec<TranslatedBlock> = ocr_blocks
         .into_iter()
         .enumerate()
         .map(|(i, block)| {
-            // 如果翻译行数与OCR块数不匹配，缺少的行用原文填充
-            let translated = translated_lines
-                .get(i)
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| block.text.clone());
+            // 如果翻译段落数与OCR块数不匹配，缺少的段落用空字符串代替
+            // 避免原文英文混入译文面板
+            let translated = if i < translated_paragraphs.len() {
+                translated_paragraphs[i].to_string()
+            } else {
+                String::new()
+            };
             TranslatedBlock {
                 original: block.text,
                 translated,
@@ -120,7 +135,7 @@ pub async fn call_text_api(
         "messages": [
             {
                 "role": "system",
-                "content": "你是翻译助手。用户会发送多行文本，请逐行翻译，每行翻译结果单独占一行，行数必须与原文完全一致。不要合并、拆分或增减行数。"
+                "content": "你是翻译助手。用户会发送多段文本，段落之间用空行分隔。请逐段翻译，每段翻译结果单独用空行分隔，段落数量必须与原文完全一致。保持原文中的换行结构不变。不要合并、拆分或增减段落。"
             },
             {
                 "role": "user",

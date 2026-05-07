@@ -255,11 +255,12 @@ fn execute_tesseract_and_read_tsv(
 
 /// 解析Tesseract TSV输出为OcrBlock列表
 /// TSV列: level, page_num, block_num, par_num, line_num, word_num, left, top, width, height, conf, text
-/// 将词级(level=5)结果按行号(line_num)合并为行级块，以便翻译时按行匹配
+/// 先按(block_num, par_num, line_num)收集词级数据，再按(block_num, par_num)合并为段落级块，
+/// 使同一段落的多行文本合并为一个翻译单元
 fn parse_tsv(tsv_content: &str, img_width: f64, img_height: f64) -> Result<Vec<OcrBlock>, AppError> {
     use std::collections::BTreeMap;
 
-    /// 行内词的中间数据
+    /// 词级数据
     struct WordInfo {
         text: String,
         left: f64,
@@ -268,16 +269,26 @@ fn parse_tsv(tsv_content: &str, img_width: f64, img_height: f64) -> Result<Vec<O
         height: f64,
     }
 
-    // 按行号收集词级数据
-    let mut line_words: BTreeMap<i32, Vec<WordInfo>> = BTreeMap::new();
+    /// 行级数据（合并后的单行文本及边界）
+    struct LineData {
+        text: String,
+        min_left: f64,
+        min_top: f64,
+        max_right: f64,
+        max_bottom: f64,
+    }
 
-    for line in tsv_content.lines().skip(1) {
-        let line = line.trim();
-        if line.is_empty() {
+    // 第一步：按(块号, 段落号, 行号)收集词级数据
+    // 注意：line_num 在每个段落内从 0 开始，不能单独作为分组键
+    let mut line_words: BTreeMap<(i32, i32, i32), Vec<WordInfo>> = BTreeMap::new();
+
+    for tsv_line in tsv_content.lines().skip(1) {
+        let tsv_line = tsv_line.trim();
+        if tsv_line.is_empty() {
             continue;
         }
 
-        let fields: Vec<&str> = line.split('\t').collect();
+        let fields: Vec<&str> = tsv_line.split('\t').collect();
         if fields.len() < 12 {
             continue;
         }
@@ -303,9 +314,11 @@ fn parse_tsv(tsv_content: &str, img_width: f64, img_height: f64) -> Result<Vec<O
             continue;
         }
 
-        // 按行号分组
+        // 使用(block_num, par_num, line_num)作为分组键，避免不同段落的同行号被合并
+        let block_num: i32 = fields[2].trim().parse().unwrap_or(0);
+        let par_num: i32 = fields[3].trim().parse().unwrap_or(0);
         let line_num: i32 = fields[4].trim().parse().unwrap_or(0);
-        line_words.entry(line_num).or_default().push(WordInfo {
+        line_words.entry((block_num, par_num, line_num)).or_default().push(WordInfo {
             text,
             left,
             top,
@@ -314,9 +327,10 @@ fn parse_tsv(tsv_content: &str, img_width: f64, img_height: f64) -> Result<Vec<O
         });
     }
 
-    // 将每行的词合并为一个行级OcrBlock
-    let mut blocks = Vec::new();
-    for (_line_num, mut words) in line_words {
+    // 第二步：按(block_num, par_num)将行合并为段落
+    let mut paragraph_lines: BTreeMap<(i32, i32), Vec<LineData>> = BTreeMap::new();
+
+    for ((block_num, par_num, _line_num), mut words) in line_words {
         if words.is_empty() {
             continue;
         }
@@ -338,6 +352,31 @@ fn parse_tsv(tsv_content: &str, img_width: f64, img_height: f64) -> Result<Vec<O
             .iter()
             .map(|w| w.top + w.height)
             .fold(f64::MIN, f64::max);
+
+        paragraph_lines.entry((block_num, par_num)).or_default().push(LineData {
+            text,
+            min_left,
+            min_top,
+            max_right,
+            max_bottom,
+        });
+    }
+
+    // 第三步：将段落转换为OcrBlock（段落内所有行合并为一个块）
+    let mut blocks = Vec::new();
+    for (_key, lines) in paragraph_lines {
+        if lines.is_empty() {
+            continue;
+        }
+
+        // 段落文本：每行用换行符连接，保留原文换行结构
+        let text = lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
+
+        // 段落边界框：所有行的并集
+        let min_left = lines.iter().map(|l| l.min_left).fold(f64::MAX, f64::min);
+        let min_top = lines.iter().map(|l| l.min_top).fold(f64::MAX, f64::min);
+        let max_right = lines.iter().map(|l| l.max_right).fold(f64::MIN, f64::max);
+        let max_bottom = lines.iter().map(|l| l.max_bottom).fold(f64::MIN, f64::max);
 
         let bbox_width = max_right - min_left;
         let bbox_height = max_bottom - min_top;
