@@ -8,7 +8,7 @@
   >
     <!-- 内容行：左侧截图 + 右侧译文面板 -->
     <div class="content-row">
-      <div class="image-area" ref="imageArea">
+      <div class="image-area" ref="imageArea" :style="{ boxShadow: shadowStyle }">
         <img
           v-if="imageDataUrl"
           :src="imageDataUrl"
@@ -62,7 +62,7 @@ import ControlBar from '@/components/ControlBar.vue'
 const TAG = 'PinView'
 
 // 阴影内边距，需与后端 window/mod.rs 中的 PIN_PADDING 保持一致
-const PIN_PADDING = 4
+const PIN_PADDING = 14
 // 译文面板最大宽度
 const MAX_PANEL_WIDTH = 340
 
@@ -82,6 +82,9 @@ const errorMessage = ref<string>('')
 const filteredBlocks = computed(() =>
   translatedBlocks.value.filter(b => b.translated.length > 0)
 )
+
+// 自适应阴影样式（根据图片边缘亮度选择暗色或亮色阴影）
+const shadowStyle = ref('0 1px 5px 1px rgba(0,0,0,0.4)')
 
 // 保存原始 base64 数据用于翻译
 let rawBase64Data = ''
@@ -158,6 +161,86 @@ async function updateWindowSize(includePanel: boolean) {
   }
 }
 
+/**
+ * 分析图片边缘像素亮度并设置自适应阴影
+ * 通过 Canvas 提取图片四边（上下左右各 2 像素深度）的亮度值，
+ * 若平均亮度低于阈值则使用亮色阴影（白色辉光），否则使用暗色阴影
+ */
+function analyzeEdgeBrightness(img: HTMLImageElement): void {
+  try {
+    const canvas = document.createElement('canvas')
+    const w = img.naturalWidth
+    const h = img.naturalHeight
+    if (w === 0 || h === 0) return
+
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.drawImage(img, 0, 0)
+    const imageData = ctx.getImageData(0, 0, w, h)
+    const data = imageData.data
+
+    let totalBrightness = 0
+    let count = 0
+
+    // 采样步长：图片越宽/高，步长越大，控制采样总数
+    const stepX = Math.max(4, Math.floor(w / 150))
+    const stepY = Math.max(4, Math.floor(h / 150))
+    const depth = 2 // 边缘采样深度（像素行/列数）
+
+    // 上下边缘
+    for (let x = 0; x < w; x += stepX) {
+      for (let d = 0; d < depth; d++) {
+        // 上边缘
+        if (d < h) {
+          const idx = (d * w + x) * 4
+          totalBrightness += (data[idx] + data[idx + 1] + data[idx + 2]) / 3
+          count++
+        }
+        // 下边缘
+        if (d < h) {
+          const idx = ((h - 1 - d) * w + x) * 4
+          totalBrightness += (data[idx] + data[idx + 1] + data[idx + 2]) / 3
+          count++
+        }
+      }
+    }
+
+    // 左右边缘（跳过已采样的四角区域）
+    for (let y = depth; y < h - depth; y += stepY) {
+      for (let d = 0; d < depth; d++) {
+        // 左边缘
+        if (d < w) {
+          const idx = (y * w + d) * 4
+          totalBrightness += (data[idx] + data[idx + 1] + data[idx + 2]) / 3
+          count++
+        }
+        // 右边缘
+        if (d < w) {
+          const idx = (y * w + (w - 1 - d)) * 4
+          totalBrightness += (data[idx] + data[idx + 1] + data[idx + 2]) / 3
+          count++
+        }
+      }
+    }
+
+    const avgBrightness = count > 0 ? totalBrightness / count / 255 : 0.5
+
+    // 亮度阈值 0.45：边缘偏暗时使用亮色阴影，偏亮时使用暗色阴影
+    if (avgBrightness < 0.45) {
+      // 亮色阴影：白色描边 + 辉光，在暗色背景下清晰可见
+      shadowStyle.value = '0 0 0 1px rgba(255,255,255,0.18), 0 0 10px 3px rgba(255,255,255,0.15)'
+    } else {
+      // 暗色阴影：默认的阴影效果，在亮色背景下清晰可见
+      shadowStyle.value = '0 1px 5px 1px rgba(0,0,0,0.4)'
+    }
+  } catch (err) {
+    // 分析失败时保持默认阴影
+  }
+}
+
 async function onImageLoad(event: Event) {
   const img = event.target as HTMLImageElement
   if (!img || !img.naturalWidth || !img.naturalHeight) return
@@ -167,6 +250,9 @@ async function onImageLoad(event: Event) {
   logicalImageHeight = img.naturalHeight / dpr
 
   logger.info(TAG, `图片加载完成: naturalSize=${img.naturalWidth}x${img.naturalHeight}, dpr=${dpr}, logicalSize=${logicalImageWidth}x${logicalImageHeight}`)
+
+  // 分析边缘亮度以设置自适应阴影
+  analyzeEdgeBrightness(img)
 
   await updateWindowSize(false)
 }
@@ -323,7 +409,7 @@ onUnmounted(() => {
   flex-direction: column;
   width: 100%;
   height: 100%;
-  padding: 4px;
+  padding: 14px;
   background: transparent;
   user-select: none;
 }
@@ -342,7 +428,6 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.35);
 }
 
 .pin-image {

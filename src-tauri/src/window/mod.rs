@@ -175,7 +175,8 @@ fn prepare_pin_window(
     w: u32,
     h: u32,
 ) -> Result<PinWindowInfo, AppError> {
-    const PIN_PADDING: f64 = 4.0;
+    // 阴影内边距，需与前端 PinView.vue 中的 PIN_PADDING 保持一致
+    const PIN_PADDING: f64 = 14.0;
     const CONTROL_BAR_H: f64 = 36.0;
 
     let label = format!("pin-{}", Uuid::new_v4());
@@ -199,8 +200,9 @@ fn prepare_pin_window(
 
     let info = PinWindowInfo {
         label,
-        x: logical_x,
-        y: logical_y,
+        // 窗口位置左移/上移一个 PIN_PADDING，配合前端 padding 使图片保持在原始裁剪位置
+        x: logical_x - PIN_PADDING,
+        y: logical_y - PIN_PADDING,
         width: logical_w + PIN_PADDING * 2.0,
         height: logical_h + CONTROL_BAR_H + PIN_PADDING * 2.0,
     };
