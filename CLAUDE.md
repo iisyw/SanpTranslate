@@ -7,14 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ***
 
-## Reasoning Effort: 
-Absolute maximum with no shortcuts permitted.
-You MUST be very thorough in your thinking and comprehensively decompose the problem to resolve the root cause, rigorously stress-testing your logic against all potential paths, edge cases, and adversarial scenarios.
-Explicitly write out your entire deliberation process, documenting every intermediate step, considered alternative, and rejected hypothesis to ensure absolutely no assumption is left unchecked.
-
 ## 项目概述
 
-SnapTranslate 是一款基于 Tauri 2.x 的桌面截屏翻译工具。它能截取屏幕区域、执行 OCR（Tesseract）识别文字并调用 AI 翻译，将译文覆盖在原截图上方，以贴图形式固定在桌面上。
+SnapTranslate 是一款基于 Tauri 2.x 的桌面截屏翻译工具。它能截取屏幕区域、执行 OCR（Tesseract）识别文字并调用 AI 翻译，将译文展示在右侧译文面板中，以贴图形式固定在桌面上。
 
 **当前状态：** S4 阶段已完成 — 截图、剪贴板、快捷键、贴图窗口、框选蒙版、托盘菜单、OCR、翻译、设置页面、历史记录、国际化均已实现。
 

@@ -6,43 +6,51 @@
     @mouseup="onMouseUp"
     @dblclick="onDoubleClick"
   >
-    <!-- 内容行：左侧截图 + 右侧译文面板 -->
+    <!-- 内容行：左侧（截图+控制栏） + 右侧译文面板 -->
     <div class="content-row">
-      <div class="image-area" ref="imageArea" :style="{ boxShadow: shadowStyle }">
-        <img
-          v-if="imageDataUrl"
-          :src="imageDataUrl"
-          class="pin-image"
-          draggable="false"
-          @load="onImageLoad"
+      <!-- 左侧列：图片和控制栏固定在一起，不受面板拉伸影响 -->
+      <div class="left-column">
+        <div class="image-area" ref="imageArea" :style="{ boxShadow: shadowStyle }">
+          <img
+            v-if="imageDataUrl"
+            :src="imageDataUrl"
+            class="pin-image"
+            draggable="false"
+            @load="onImageLoad"
+          />
+        </div>
+        <ControlBar
+          :translate-status="translateStatus"
+          :show-original="showOriginal"
+          :has-translation="hasTranslation"
+          :error-message="errorMessage"
+          :from-cache="fromCache"
+          @translate="onTranslate"
+          @copy-original="onCopyOriginal"
+          @copy-translation="onCopyTranslation"
+          @toggle-original="onToggleOriginal"
         />
       </div>
       <!-- 译文面板 -->
       <div
         v-if="hasTranslation && !showOriginal"
+        ref="panelRef"
         class="translation-panel"
+        :style="panelHeight ? { height: panelHeight + 'px' } : undefined"
       >
-        <div
-          v-for="(block, index) in filteredBlocks"
-          :key="index"
-          class="translation-item"
-        >
-          <div class="translation-text">{{ block.translated }}</div>
-          <div v-if="index < filteredBlocks.length - 1" class="translation-separator"></div>
+        <div class="translation-items-container">
+          <div
+            v-for="(block, index) in filteredBlocks"
+            :key="index"
+            class="translation-item"
+          >
+            <div class="translation-text">{{ block.translated }}</div>
+            <div v-if="index < filteredBlocks.length - 1" class="translation-separator"></div>
+          </div>
         </div>
+        <div class="panel-resize-handle" @mousedown.stop="onResizeStart"></div>
       </div>
     </div>
-    <ControlBar
-      :translate-status="translateStatus"
-      :show-original="showOriginal"
-      :has-translation="hasTranslation"
-      :error-message="errorMessage"
-      :from-cache="fromCache"
-      @translate="onTranslate"
-      @copy-original="onCopyOriginal"
-      @copy-translation="onCopyTranslation"
-      @toggle-original="onToggleOriginal"
-    />
   </div>
 </template>
 
@@ -79,6 +87,11 @@ const hasTranslation = ref(false)
 const translatedBlocks = ref<TranslatedBlock[]>([])
 const errorMessage = ref<string>('')
 const fromCache = ref(false)
+
+// 译文面板拉伸相关状态
+const panelRef = ref<HTMLElement | null>(null)
+const panelHeight = ref<number | null>(null) // 显式高度（拉伸后设置）
+let initialPanelHeight = 0 // 面板初始高度，作为最小高度限制
 
 // 过滤掉空翻译的块，避免在译文面板中显示空白项
 const filteredBlocks = computed(() =>
@@ -148,10 +161,14 @@ async function updateWindowSize(includePanel: boolean) {
 
   const controlBarH = 36
   let width = logicalImageWidth + PIN_PADDING * 2
-  const height = logicalImageHeight + controlBarH + PIN_PADDING * 2
+  let height = logicalImageHeight + controlBarH + PIN_PADDING * 2
 
   if (includePanel && storedPanelWidth > 0) {
     width += storedPanelWidth
+    // 如果面板已被拉伸且高度超过图片高度，增加窗口高度
+    if (panelHeight.value && panelHeight.value > logicalImageHeight) {
+      height += (panelHeight.value - logicalImageHeight)
+    }
   }
 
   try {
@@ -252,6 +269,12 @@ async function onImageLoad(event: Event) {
 
   logger.info(TAG, `图片加载完成: naturalSize=${img.naturalWidth}x${img.naturalHeight}, dpr=${dpr}, logicalSize=${logicalImageWidth}x${logicalImageHeight}`)
 
+  // 设置图片区域显式尺寸，防止 flex stretch 导致图片被拉伸变形
+  if (imageArea.value) {
+    imageArea.value.style.width = `${logicalImageWidth}px`
+    imageArea.value.style.height = `${logicalImageHeight}px`
+  }
+
   // 分析边缘亮度以设置自适应阴影
   analyzeEdgeBrightness(img)
 
@@ -288,6 +311,7 @@ onMounted(async () => {
 function onMouseDown(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (target.closest('.control-bar button')) return
+  if (target.closest('.panel-resize-handle')) return // 不干扰面板拉伸
 
   mouseDownX = e.clientX
   mouseDownY = e.clientY
@@ -315,6 +339,52 @@ function onMouseUp() {
   mouseDownX = 0
   mouseDownY = 0
   hasStartedDrag = false
+}
+
+/** 开始拉伸译文面板高度 */
+function onResizeStart(e: MouseEvent) {
+  e.preventDefault()
+  if (!panelRef.value || initialPanelHeight <= 0) return
+
+  const startY = e.clientY
+  const startHeight = panelRef.value.offsetHeight
+
+  function onMouseMove(e: MouseEvent) {
+    const diff = e.clientY - startY
+    const newHeight = Math.max(initialPanelHeight, startHeight + diff)
+    panelHeight.value = newHeight
+    updateWindowSizeAfterPanelResize(newHeight)
+  }
+
+  function onMouseUp() {
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
+
+/** 拉伸后更新窗口高度 */
+async function updateWindowSizeAfterPanelResize(panelH: number) {
+  if (!logicalImageWidth || !logicalImageHeight) return
+
+  const controlBarH = 36
+  let width = logicalImageWidth + PIN_PADDING * 2
+  if (storedPanelWidth > 0) {
+    width += storedPanelWidth
+  }
+
+  let height = logicalImageHeight + controlBarH + PIN_PADDING * 2
+  if (panelH > logicalImageHeight) {
+    height += (panelH - logicalImageHeight)
+  }
+
+  try {
+    await getCurrentWindow().setSize(new LogicalSize(width, height))
+  } catch (err) {
+    logger.error(TAG, `拉伸后窗口大小调整失败: ${err}`, err)
+  }
 }
 
 async function onDoubleClick(event: MouseEvent) {
@@ -358,10 +428,15 @@ async function onTranslate() {
 
     logger.info(TAG, `翻译完成，共 ${translatedBlocks.value.length} 个翻译块`)
 
-    // 在下一帧测量面板宽度并调整窗口大小
+    // 在下一帧测量面板宽度和初始高度，并调整窗口大小
     await nextTick()
     storedPanelWidth = measurePanelWidth(result.blocks)
-    logger.info(TAG, `译文面板测量宽度: ${storedPanelWidth}px`)
+    if (panelRef.value) {
+      initialPanelHeight = panelRef.value.offsetHeight
+      logger.info(TAG, `译文面板测量宽度: ${storedPanelWidth}px, 初始高度: ${initialPanelHeight}px`)
+    } else {
+      logger.info(TAG, `译文面板测量宽度: ${storedPanelWidth}px`)
+    }
 
     await updateWindowSize(true)
   } catch (err) {
@@ -424,6 +499,13 @@ async function onToggleOriginal() {
   min-height: 0;
 }
 
+/* 左侧列：图片和控制栏固定在一起，不随面板拉伸而移动 */
+.left-column {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+}
+
 .image-area {
   flex: 0 0 auto;
   overflow: hidden;
@@ -445,12 +527,21 @@ async function onToggleOriginal() {
 .translation-panel {
   background: rgba(30, 30, 30, 0.92);
   border-left: 1px solid rgba(255, 255, 255, 0.12);
-  padding: 16px;
   max-width: 340px;
-  overflow-y: auto;
   font-size: 13px;
   line-height: 1.8;
   color: #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 译文内容可滚动容器 */
+.translation-items-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 16px 8px 16px;
+  min-height: 0;
 }
 
 .translation-item {
@@ -469,16 +560,42 @@ async function onToggleOriginal() {
   margin: 10px 0;
 }
 
+/* 译文面板高度拉伸手柄 */
+.panel-resize-handle {
+  flex-shrink: 0;
+  height: 10px;
+  cursor: ns-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* 手柄上的三杠指示器 */
+.panel-resize-handle::before {
+  content: '';
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background 0.15s;
+}
+
+.panel-resize-handle:hover::before,
+.panel-resize-handle:active::before {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 /* 译文面板滚动条样式 */
-.translation-panel::-webkit-scrollbar {
+.translation-items-container::-webkit-scrollbar {
   width: 4px;
 }
 
-.translation-panel::-webkit-scrollbar-track {
+.translation-items-container::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.translation-panel::-webkit-scrollbar-thumb {
+.translation-items-container::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.15);
   border-radius: 2px;
 }
