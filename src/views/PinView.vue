@@ -489,6 +489,7 @@ async function onToggleOriginal() {
   padding: 14px;
   background: transparent;
   user-select: none;
+  overflow: hidden;
 }
 
 .content-row {
@@ -590,11 +591,9 @@ async function onToggleOriginal() {
 .translation-items-container::-webkit-scrollbar {
   width: 4px;
 }
-
 .translation-items-container::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .translation-items-container::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.15);
   border-radius: 2px;
