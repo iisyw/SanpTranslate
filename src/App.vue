@@ -1,5 +1,5 @@
 <template>
-  <div @contextmenu.prevent>
+  <div style="height: 100%" @contextmenu.prevent>
     <router-view />
   </div>
 </template>
