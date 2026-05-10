@@ -38,6 +38,7 @@ export default {
   settings: {
     title: 'Settings',
     languageConfig: 'Language',
+    generalConfig: 'General',
     language: 'Language',
     languageAuto: 'Follow System',
     languageZhCN: '简体中文',
@@ -73,6 +74,10 @@ export default {
     apiKeyDeleted: 'API key deleted',
     deleteApiKeyFailed: 'Failed to delete API key',
     apiKeyStoredInKeyring: 'Key is securely stored in system keyring',
+    autoStart: 'Auto Start',
+    autoStartEnabled: 'Auto start enabled',
+    autoStartDisabled: 'Auto start disabled',
+    autoStartFailed: 'Failed to set auto start',
     // Language options
     langZhCN: 'Simplified Chinese',
     langZhTW: 'Traditional Chinese',

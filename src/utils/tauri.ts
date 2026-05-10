@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { enable as autostartEnable, disable as autostartDisable, isEnabled as autostartIsEnabled } from '@tauri-apps/plugin-autostart'
 
 /** 应用配置，与后端 Rust AppConfig 结构体保持一致 */
 export interface AppConfig {
@@ -206,4 +207,19 @@ export async function deleteHistory(id: number): Promise<boolean> {
 /** 清空所有历史记录 */
 export async function clearHistory(): Promise<boolean> {
   return invoke<boolean>('clear_history')
+}
+
+/** 开启开机自启动 */
+export async function enableAutoStart(): Promise<void> {
+  return autostartEnable()
+}
+
+/** 关闭开机自启动 */
+export async function disableAutoStart(): Promise<void> {
+  return autostartDisable()
+}
+
+/** 查询开机自启动是否已开启 */
+export async function isAutoStartEnabled(): Promise<boolean> {
+  return autostartIsEnabled()
 }

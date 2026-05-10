@@ -26,6 +26,10 @@ pub fn run() {
                 .level(log::LevelFilter::Debug)
                 .build(),
         )
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![]),
+        ))
         .manage(Mutex::new(window::PinImageStore::default()))
         .manage(Mutex::new(window::CachedScreenStore::default()))
         .manage(Mutex::new(tray::TrayState::default()))

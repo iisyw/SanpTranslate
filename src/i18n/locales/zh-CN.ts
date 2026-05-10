@@ -38,6 +38,7 @@ export default {
   settings: {
     title: '设置',
     languageConfig: '界面语言',
+    generalConfig: '通用设置',
     language: '语言',
     languageAuto: '跟随系统',
     languageZhCN: '简体中文',
@@ -73,6 +74,10 @@ export default {
     apiKeyDeleted: 'API 密钥已删除',
     deleteApiKeyFailed: '删除 API 密钥失败',
     apiKeyStoredInKeyring: '密钥已安全保存在系统密钥环中',
+    autoStart: '开机自启动',
+    autoStartEnabled: '已开启开机自启动',
+    autoStartDisabled: '已关闭开机自启动',
+    autoStartFailed: '设置开机自启动失败',
     // 目标语言选项
     langZhCN: '中文简体',
     langZhTW: '中文繁体',

@@ -15,6 +15,19 @@
             </n-form>
           </n-card>
 
+          <!-- 通用设置区域 -->
+          <n-card :title="t('settings.generalConfig')" size="small">
+            <n-form label-placement="left" label-width="100" :show-feedback="false">
+              <n-form-item :label="t('settings.autoStart')">
+                <n-switch
+                  v-model:value="autoStartEnabled"
+                  :loading="autoStartLoading"
+                  @update:value="onToggleAutoStart"
+                />
+              </n-form-item>
+            </n-form>
+          </n-card>
+
           <!-- API 配置区域 -->
           <n-card :title="t('settings.apiConfig')" size="small">
             <n-form label-placement="left" label-width="100" :show-feedback="false">
@@ -139,10 +152,11 @@ import {
   NText,
   NTooltip,
   NIcon,
+  NSwitch,
   createDiscreteApi,
 } from 'naive-ui'
 import { useConfigStore } from '@/stores/configStore'
-import { testApiConnection, deleteApiKey, getConfigPath, type AppConfig } from '@/utils/tauri'
+import { testApiConnection, deleteApiKey, getConfigPath, enableAutoStart, disableAutoStart, isAutoStartEnabled, type AppConfig } from '@/utils/tauri'
 import { logger } from '@/utils/logger'
 import ShortcutInput from '@/components/ShortcutInput.vue'
 
@@ -179,6 +193,10 @@ const saving = ref(false)
 const testing = ref(false)
 const deleting = ref(false)
 const configPath = ref('')
+
+// 开机自启动状态
+const autoStartEnabled = ref(false)
+const autoStartLoading = ref(false)
 
 // 是否已有 API 密钥（从 keyring 读取）
 const hasApiKey = computed(() => !!configStore.apiKey)
@@ -330,15 +348,39 @@ async function onDeleteApiKey() {
   })
 }
 
+/** 切换开机自启动 */
+async function onToggleAutoStart(enabled: boolean) {
+  autoStartLoading.value = true
+  try {
+    if (enabled) {
+      await enableAutoStart()
+      message.success(t('settings.autoStartEnabled'))
+      logger.info(TAG, '开机自启动已开启')
+    } else {
+      await disableAutoStart()
+      message.success(t('settings.autoStartDisabled'))
+      logger.info(TAG, '开机自启动已关闭')
+    }
+  } catch (err) {
+    // 切换失败时恢复原状态
+    autoStartEnabled.value = !enabled
+    message.error(`${t('settings.autoStartFailed')}: ${err}`)
+    logger.error(TAG, `设置开机自启动失败: ${err}`)
+  } finally {
+    autoStartLoading.value = false
+  }
+}
+
 // 页面加载时初始化配置数据
 onMounted(async () => {
   loading.value = true
   try {
-    // 并行加载配置、API 密钥和配置文件路径
-    const [, , path] = await Promise.all([
+    // 并行加载配置、API 密钥、配置文件路径和开机自启动状态
+    const [, , path, autoStart] = await Promise.all([
       configStore.loadConfig(),
       configStore.loadApiKey(),
       getConfigPath(),
+      isAutoStartEnabled().catch(() => false),
     ])
 
     // 将加载的配置填充到表单
@@ -348,6 +390,9 @@ onMounted(async () => {
 
     // 保存配置文件路径
     configPath.value = path
+
+    // 保存开机自启动状态
+    autoStartEnabled.value = autoStart
 
     logger.info(TAG, '设置页面初始化完成')
   } catch (err) {

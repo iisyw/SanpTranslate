@@ -30,3 +30,4 @@ uuid = { version = "1", features = ["v4"] }
 tauri-plugin-log = "2.8.0"
 log = "0.4.29"
 sys-locale = "0.3"
+tauri-plugin-autostart = "2.5.1"

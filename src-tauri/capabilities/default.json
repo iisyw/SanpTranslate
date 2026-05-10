@@ -28,6 +28,7 @@
     "global-shortcut:allow-unregister",
     "global-shortcut:allow-is-registered",
     "log:default",
+    "autostart:default",
     "core:webview:allow-create-webview-window"
   ]
 }
