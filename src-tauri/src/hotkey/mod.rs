@@ -1,15 +1,32 @@
+use std::sync::{Arc, Mutex};
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 use crate::config::ShortcutConfig;
 use crate::error::AppError;
 
+/// 当前已注册的快捷键（解析后的 Shortcut 对象），供全局处理器动态查询
+pub struct CurrentShortcuts {
+    pub capture: Shortcut,
+    pub pin_clipboard: Shortcut,
+}
+
+/// 注册全局快捷键（应用启动时调用）
 pub fn register_hotkeys(app: &tauri::AppHandle, config: &ShortcutConfig) -> Result<(), AppError> {
     let capture_shortcut = parse_shortcut(&config.capture)?;
     let pin_clipboard_shortcut = parse_shortcut(&config.pin_clipboard)?;
 
-    let cs = capture_shortcut;
-    let ps = pin_clipboard_shortcut;
+    // 使用 Arc<Mutex> 存储快捷键，闭包直接捕获 Arc 避免生命周期问题
+    let shortcuts = Arc::new(Mutex::new(CurrentShortcuts {
+        capture: capture_shortcut,
+        pin_clipboard: pin_clipboard_shortcut,
+    }));
+
+    // 存入应用状态，供 reregister_hotkeys 更新
+    app.manage(shortcuts.clone());
+
+    // 闭包捕获 Arc 的克隆，直接通过 Arc 访问快捷键
+    let shortcuts_handler = shortcuts.clone();
 
     app.plugin(
         tauri_plugin_global_shortcut::Builder::new()
@@ -18,9 +35,18 @@ pub fn register_hotkeys(app: &tauri::AppHandle, config: &ShortcutConfig) -> Resu
                     return;
                 }
 
-                if shortcut == &cs {
+                // 通过 Arc 直接访问，将比较结果复制出来后再调用处理函数
+                let is_capture;
+                let is_pin;
+                {
+                    let current = shortcuts_handler.lock().unwrap();
+                    is_capture = shortcut == &current.capture;
+                    is_pin = shortcut == &current.pin_clipboard;
+                }
+
+                if is_capture {
                     handle_capture_hotkey(app);
-                } else if shortcut == &ps {
+                } else if is_pin {
                     handle_pin_clipboard_hotkey(app);
                 }
             })
@@ -39,10 +65,46 @@ pub fn register_hotkeys(app: &tauri::AppHandle, config: &ShortcutConfig) -> Resu
     Ok(())
 }
 
+/// 重新注册快捷键（配置变更后调用）
+pub fn reregister_hotkeys(app: &tauri::AppHandle, new_config: &ShortcutConfig) -> Result<(), AppError> {
+    let new_capture = parse_shortcut(&new_config.capture)?;
+    let new_pin = parse_shortcut(&new_config.pin_clipboard)?;
+
+    // 注销所有已注册的快捷键
+    app.global_shortcut()
+        .unregister_all()
+        .map_err(|e| AppError::ConfigError(format!("注销快捷键失败: {}", e)))?;
+
+    // 注册新的快捷键
+    app.global_shortcut()
+        .register(new_capture)
+        .map_err(|e| AppError::ConfigError(format!("注册截图快捷键失败: {}", e)))?;
+
+    app.global_shortcut()
+        .register(new_pin)
+        .map_err(|e| AppError::ConfigError(format!("注册剪贴板贴图快捷键失败: {}", e)))?;
+
+    // 通过 Arc 更新状态中的快捷键，使处理器能匹配新的快捷键
+    let shortcuts = app.state::<Arc<Mutex<CurrentShortcuts>>>();
+    let mut current = shortcuts
+        .lock()
+        .map_err(|e| AppError::ConfigError(format!("锁定快捷键状态失败: {}", e)))?;
+    current.capture = new_capture;
+    current.pin_clipboard = new_pin;
+
+    log::info!(
+        "[HOTKEY] 快捷键已更新: 截图={}, 剪贴板贴图={}",
+        new_config.capture,
+        new_config.pin_clipboard
+    );
+
+    Ok(())
+}
+
 /// 截屏流程：先创建蒙版窗口，再执行耗时截图
 pub fn handle_capture_flow(app: &tauri::AppHandle) -> Result<(), AppError> {
-    // Step 1: 获取显示器信息（快速操作）
-    let monitor = app.primary_monitor()
+    let monitor = app
+        .primary_monitor()
         .ok()
         .flatten()
         .ok_or_else(|| AppError::ConfigError("获取主显示器信息失败".to_string()))?;
@@ -50,21 +112,22 @@ pub fn handle_capture_flow(app: &tauri::AppHandle) -> Result<(), AppError> {
     let monitor_x = (monitor.position().x as f64 * scale_factor).round() as i32;
     let monitor_y = (monitor.position().y as f64 * scale_factor).round() as i32;
 
-    // Step 2: 立即创建蒙版窗口
     crate::window::create_overlay_window_lazy(app)?;
     log::info!("[HOTKEY] overlay 窗口创建成功（加载中...）");
 
-    // Step 3: 执行耗时的全屏截图 + JPEG编码
     let (jpeg_base64, rgba_image) = {
         let state = app.state::<std::sync::Mutex<crate::capture::CaptureService>>();
-        let locked = state.lock().map_err(|e| AppError::ConfigError(format!("锁定截图服务失败: {}", e)))?;
+        let locked = state.lock().map_err(|e| {
+            AppError::ConfigError(format!("锁定截图服务失败: {}", e))
+        })?;
         locked.capture_fullscreen_with_cache(None)?
     };
 
-    // Step 4: 存储截图数据到缓存，前端通过轮询获取
     {
         let store = app.state::<std::sync::Mutex<crate::window::CachedScreenStore>>();
-        let mut store = store.lock().map_err(|e| AppError::ConfigError(format!("锁定缓存失败: {}", e)))?;
+        let mut store = store.lock().map_err(|e| {
+            AppError::ConfigError(format!("锁定缓存失败: {}", e))
+        })?;
         store.screen = Some(crate::window::CachedScreen {
             image: rgba_image,
             monitor_x,
@@ -113,7 +176,9 @@ fn handle_pin_clipboard_hotkey(app: &tauri::AppHandle) {
 
         let (mon_x, mon_y, mon_w, mon_h) = {
             let state = app.state::<std::sync::Mutex<crate::capture::CaptureService>>();
-            let locked = state.lock().map_err(|e| AppError::ConfigError(format!("锁定截图服务失败: {}", e)))?;
+            let locked = state.lock().map_err(|e| {
+                AppError::ConfigError(format!("锁定截图服务失败: {}", e))
+            })?;
             locked.get_primary_monitor_info()?
         };
 

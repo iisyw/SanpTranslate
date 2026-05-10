@@ -4,6 +4,7 @@
 
 | 文档版本 | 修订日期   | 作者   | 变更说明         |
 |----------|------------|--------|------------------|
+| V1.5     | 2026-05-10 | XuMingKe | 新增界面语言配置；更新控制栏组件设计；新增 ShortcutInput 组件 |
 | V1.4     | 2026-05-08 | XuMingKe | 新增翻译缓存机制，优化数据库结构 |
 | V1.3     | 2026-05-07 | XuMingKe | 完成历史记录模块；移除"翻译最近一张贴图"功能 |
 | V1.2     | 2026-05-05 | XuMingKe | 合并翻译模式，统一使用 OCR 翻译流程 |
@@ -801,11 +802,15 @@ defineProps<{
   translateStatus: 'idle' | 'translating' | 'done' | 'error'
   showOriginal: boolean
   hasTranslation: boolean
+  errorMessage?: string
+  fromCache?: boolean
 }>()
 
 defineEmits<{
   translate: []
-  copyAll: []
+  retranslate: []
+  copyOriginal: []
+  copyTranslation: []
   toggleOriginal: []
 }>()
 ```
@@ -814,17 +819,30 @@ defineEmits<{
 
 ```html
 <div class="control-bar">
-  <button v-if="translateStatus === 'idle'" class="btn btn-primary" @click="$emit('translate')">
-    {{ t('pin.translate') }}
+  <!-- idle 或 error 状态：显示翻译/重新翻译按钮 -->
+  <button v-if="translateStatus === 'idle' || translateStatus === 'error'" class="btn" @click="$emit('translate')">
+    {{ translateStatus === 'error' ? t('controlBar.retranslate') : t('controlBar.translate') }}
   </button>
+
+  <!-- error 状态：显示错误提示 -->
+  <span v-if="translateStatus === 'error' && errorMessage" class="error-msg">
+    {{ errorMessage }}
+  </span>
+
+  <!-- translating 状态：显示禁用的翻译中按钮 -->
   <button v-else-if="translateStatus === 'translating'" class="btn" disabled>
-    {{ t('pin.translating') }}
+    {{ t('controlBar.translating') }}
   </button>
-  <template v-if="translateStatus === 'done'">
-    <button class="btn" @click="$emit('copyAll')">{{ t('pin.copy_all') }}</button>
+
+  <!-- done 状态：显示操作按钮组 -->
+  <template v-else-if="translateStatus === 'done'">
+    <button class="btn" @click="$emit('copyOriginal')">{{ t('controlBar.copyOriginal') }}</button>
+    <button class="btn" @click="$emit('copyTranslation')">{{ t('controlBar.copyTranslation') }}</button>
+    <button class="btn" @click="$emit('retranslate')">{{ t('controlBar.retranslate') }}</button>
     <button class="btn" @click="$emit('toggleOriginal')">
-      {{ showOriginal ? t('pin.show_translation') : t('pin.toggle_original') }}
+      {{ showOriginal ? t('controlBar.showTranslation') : t('controlBar.showOriginal') }}
     </button>
+    <span v-if="fromCache" class="cache-hint">{{ t('controlBar.cacheHit') }}</span>
   </template>
 </div>
 ```
@@ -838,30 +856,38 @@ defineEmits<{
   gap: 8px;
   padding: 4px 0;
   background: transparent;
-  min-height: 36px;
+  min-height: var(--control-bar-height);
 }
 
 .btn {
   padding: 4px 12px;
   border: none;
-  border-radius: 0;
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
+  border-radius: var(--border-radius);
+  background: #3a3a40;
+  color: #f0f0f0;
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s;
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: #4e4e55;
 }
 
-.btn-primary {
-  background: rgba(255, 255, 255, 0.85);
+.cache-hint {
+  font-size: 12px;
+  color: #4caf50;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
-.btn-primary:hover {
-  background: rgba(255, 255, 255, 1);
+.error-msg {
+  font-size: 12px;
+  color: var(--color-danger);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 ```
 
@@ -877,22 +903,99 @@ defineEmits<{
 
 | 字段             | 组件类型   | 验证规则                       |
 |-----------------|-----------|--------------------------------|
+| 界面语言         | Select    | 必填，选项：跟随系统/简体中文/English |
 | API 基础地址     | Input     | 必填，合法 URL                 |
 | API 密钥        | Input (password) | 必填，可切换显示/隐藏   |
 | 模型名称        | Input     | 必填                           |
-| 目标翻译语言     | Select    | 必填，选项：中文/英文/日文/韩文/法文/德文/西班牙文 |
-| 截图快捷键       | HotkeyInput | 合法快捷键组合                |
-| 贴图快捷键       | HotkeyInput | 合法快捷键组合                |
+| 目标翻译语言     | Select    | 必填，选项：中文/英文/日文/韩文/法文/德文/西班牙文/俄文 |
+| 截图快捷键       | ShortcutInput | 合法快捷键组合                |
+| 贴图快捷键       | ShortcutInput | 合法快捷键组合                |
 
 ---
 
-### 3.6 HistoryView.vue 历史面板
+### 3.6 ShortcutInput.vue 快捷键输入组件
 
 #### 3.6.1 组件职责
 
+提供快捷键捕获和显示功能，支持点击后监听键盘输入捕获快捷键组合。
+
+#### 3.6.2 Props
+
+```typescript
+defineProps<{
+  modelValue: string  // 当前快捷键值，如 "Ctrl+Alt+L"
+  placeholder?: string
+}>()
+
+defineEmits<{
+  'update:modelValue': [value: string]
+}>()
+```
+
+#### 3.6.3 模板
+
+```html
+<div class="shortcut-input" @click="startListening">
+  <input
+    type="text"
+    :value="displayValue"
+    :placeholder="placeholder"
+    readonly
+    @keydown="onKeydown"
+  />
+  <button v-if="modelValue" class="clear-btn" @click.stop="clearValue">
+    ×
+  </button>
+</div>
+```
+
+#### 3.6.4 样式
+
+```css
+.shortcut-input {
+  display: flex;
+  align-items: center;
+  background: #2a2a30;
+  border-radius: var(--border-radius);
+  padding: 0 8px;
+}
+
+.shortcut-input input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #f0f0f0;
+  font-size: 14px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.shortcut-input input:focus {
+  outline: none;
+}
+
+.clear-btn {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.clear-btn:hover {
+  color: #fff;
+}
+```
+
+---
+
+### 3.7 HistoryView.vue 历史面板
+
+#### 3.7.1 组件职责
+
 展示翻译历史列表，支持查看详情、复制、删除。
 
-#### 3.6.2 模板结构
+#### 3.7.2 模板结构
 
 ```html
 <div class="history-container">

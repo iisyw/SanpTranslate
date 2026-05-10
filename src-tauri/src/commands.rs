@@ -16,7 +16,15 @@ pub fn save_config(app: tauri::AppHandle, config: AppConfig) -> Result<(), Strin
     let manager = ConfigManager::new(&app).map_err(|e| e.to_string())?;
     manager.save(&config).map_err(|e| e.to_string())?;
 
-    // 更新托盘菜单以反映语言变更
+    // 重新注册全局快捷键（注销旧的，注册新的）
+    #[cfg(desktop)]
+    {
+        if let Err(e) = crate::hotkey::reregister_hotkeys(&app, &config.shortcuts) {
+            log::error!("重新注册快捷键失败: {}", e);
+        }
+    }
+
+    // 更新托盘菜单以反映快捷键和语言变更
     if let Err(e) = crate::tray::update_tray_menu(&app, &config.shortcuts, &config.language) {
         log::warn!("更新托盘菜单失败: {}", e);
     }

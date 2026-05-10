@@ -4,6 +4,7 @@
 
 | 文档版本 | 修订日期   | 作者   | 变更说明         |
 |----------|------------|--------|------------------|
+| V1.5     | 2026-05-10 | XuMingKe | 新增界面语言配置；更新译文展示方式为右侧面板 |
 | V1.4     | 2026-05-08 | XuMingKe | 新增翻译缓存机制，优化数据库结构 |
 | V1.3     | 2026-05-07 | XuMingKe | 完成历史记录模块；移除"翻译最近一张贴图"功能 |
 | V1.2     | 2026-05-05 | XuMingKe | 合并翻译模式，统一使用 OCR 翻译流程 |
@@ -153,6 +154,7 @@ pub struct AppConfig {
     pub api_base_url: String,
     pub model: String,
     pub target_language: String,
+    pub language: String,          // 界面语言：auto/zh-CN/en-US
     pub shortcuts: ShortcutConfig,
 }
 
@@ -355,14 +357,14 @@ base_url = "https://api.example.com/v1"
 model = "gpt-4o-mini"
 target_language = "zh-CN"
 
-[shortcuts]
-capture = "Ctrl+Alt+L"
-pin_clipboard = "Ctrl+Alt+P"
-
 [general]
 language = "auto"
 max_history = 50
 log_enabled = false
+
+[shortcuts]
+capture = "Ctrl+Alt+L"
+pin_clipboard = "Ctrl+Alt+P"
 ```
 
 ---

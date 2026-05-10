@@ -57,13 +57,13 @@ npm run preview
 | `window`    | `window/mod.rs`     | **已完成** — `create_settings_window`/`create_history_window`（单例模式）、`create_overlay_window`（全屏蒙版，将图像数据存入缓存供前端拉取）、`create_pin_window`（UUID 标签，窗口尺寸预留控制栏高度）、`close_pin_window`、`get_pin_image`、`PinImageStore`/`CachedScreenStore`/`CachedScreen`/`OverlayImageData`/`CropResult` 数据结构 |
 | `tray`      | `tray/mod.rs`       | **已完成** — 系统托盘菜单：框选截图翻译、从剪贴板贴图、历史记录、设置、退出；所有菜单项已接入实际逻辑                                                                                                                  |
 | `commands`  | `commands.rs`       | **已完成** — 十八个 Tauri 命令：`get_config`、`save_config`、`write_clipboard_image`、`read_clipboard_image`、`write_clipboard_text`、`close_pin_window`、`get_pin_image`、`capture_region_from_cache`、`get_overlay_image`、`store_pin_image`、`translate_image`、`get_api_key`、`set_api_key`、`test_api_connection`、`get_history_list`、`get_history_detail`、`delete_history`、`clear_history` |
-| `error`     | `error.rs`          | **已完成** — 统一的 `AppError` 枚举，`Display` 输出中文错误信息，包含 `io`、`toml`、`reqwest`、`rusqlite`、`tauri` 的 `From` 实现                                                                                              |
+| `error`     | `error.rs`          | **已完成** — 统一的 `AppError` 枚举，`Display` 输出中文错误信息，包含 `io`、`toml`、`reqwest`、`rusqlite`、`tauri` 的 `From` 实现；新增 `TrayError` 变体 |
 | `lib.rs`    | —                   | 应用入口点：注册 opener、clipboard_manager、log 插件；管理 `PinImageStore`、`CachedScreenStore` 和 `HistoryService` 状态；注册所有命令；在 `setup()` 中初始化截图服务、历史服务、创建系统托盘并注册全局快捷键                                                                              |
 | `main.rs`   | —                   | `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]`，调用 `snap_translate_lib::run()`                                                                                                 |
 
 **关键后端模式：** 所有模块在其目录下均为扁平化的 `mod.rs` 文件。目前只有 config 采用了拆分模块结构（config/mod.rs + config/manager.rs）。
 
-**主要依赖库：** tauri 2、tauri-plugin-opener、tauri-plugin-clipboard-manager、tauri-plugin-global-shortcut、tauri-plugin-log、serde、serde_json、xcap、reqwest、toml、keyring、rusqlite、image、base64、uuid、log
+**主要依赖库：** tauri 2、tauri-plugin-opener、tauri-plugin-clipboard-manager、tauri-plugin-global-shortcut、tauri-plugin-log、serde、serde_json、xcap、reqwest、toml、keyring、rusqlite、image、base64、uuid、log、sys-locale
 
 ### 前端（`src/`）
 
@@ -71,7 +71,8 @@ npm run preview
 | ----- | --------------------------- | ----------------------------------------------------------------------------- |
 | 入口    | `main.ts`                   | 创建 Vue 应用，注册 router/Pinia/i18n                                                |
 | 路由    | `router/index.ts`           | 四个路由：`/overlay`（截图蒙版）、`/pin`（贴图）、`/settings`、`/history`                       |
-| 组件    | `components/ControlBar.vue` | **已完成** — 贴图控制栏组件：根据翻译状态（idle/translating/done/error）显示 AI 翻译按钮、翻译中状态、复制全部/切换原文译文按钮组；支持错误重试；新增缓存命中提示（`fromCache` prop） |
+| 组件    | `components/ControlBar.vue` | **已完成** — 贴图控制栏组件：根据翻译状态（idle/translating/done/error）显示翻译/重新翻译按钮、翻译中状态、复制原文/复制译文/重新翻译/原文译文切换按钮组；支持错误重试；新增缓存命中提示（`fromCache` prop） |
+| 组件    | `components/ShortcutInput.vue` | **已完成** — 快捷键输入组件：支持点击后监听键盘输入捕获快捷键组合，显示当前快捷键，支持清空和重新设置 |
 | 组件    | `components/HistoryItem.vue` | **已完成** — 历史条目组件：显示缩略图、翻译摘要和时间，支持悬停显示复制/删除操作按钮 |
 | Pinia | `stores/configStore.ts`     | **已完成** — 配置状态管理（通过 `invoke` 与 Rust 后端进行加载/保存），包含 `loadApiKey`/`setApiKey` 方法管理 API 密钥（从 keyring 读取/写入） |
 | Pinia | `stores/pinStore.ts`        | 贴图状态管理（`TranslatedBlock`、`PinState` 及贴图实例的 Map）                               |
@@ -84,8 +85,8 @@ npm run preview
 | 样式    | `styles/variables.css`      | CSS 自定义属性（深色透明主题）                                                             |
 | 样式    | `styles/global.css`         | 全局重置及基础样式                                                                     |
 | 视图    | `views/OverlayView.vue`     | **已完成** — Canvas 全屏截图蒙版，支持鼠标框选（白虚线框+暗色蒙版）、尺寸提示、Esc 关闭；选后调用后端裁剪+写入剪贴板+创建贴图窗口   |
-| 视图    | `views/PinView.vue`         | **已完成** — 贴图窗口：显示截图、控制栏组件（翻译/复制/切换）、原生窗口拖拽（排除按钮区域）、双击图片区域关闭；集成 OCR 翻译功能、翻译覆盖层显示、原文/译文切换、复制翻译文本；新增右侧译文面板布局、面板拉伸功能、自适应阴影样式 |
-| 视图    | `views/SettingsView.vue`    | **已完成** — 设置页面：使用 Naive UI 组件库，包含 API 配置（地址/密钥/模型）、翻译配置（目标语言）、快捷键配置；支持保存配置和测试 API 连接；API 密钥通过 keyring 管理 |
+| 视图    | `views/PinView.vue`         | **已完成** — 贴图窗口：显示截图、控制栏组件（翻译/复制/切换）、原生窗口拖拽（排除按钮区域）、双击图片区域关闭；集成 OCR 翻译功能、右侧译文面板布局、面板拉伸功能、自适应阴影样式；支持复制原文/译文、原文/译文切换、重新翻译（跳过缓存） |
+| 视图    | `views/SettingsView.vue`    | **已完成** — 设置页面：使用 Naive UI 组件库，包含界面语言配置、API 配置（地址/密钥/模型）、翻译配置（目标语言）、快捷键配置；支持保存配置和测试 API 连接；API 密钥通过 keyring 管理 |
 | 视图    | `views/HistoryView.vue`     | **已完成** — 历史记录页面：使用 Naive UI 深色主题，支持列表展示、详情弹窗、复制翻译、逐条删除、清空全部                                   |
 
 **关键前端模式：** 使用 `@/` 路径别名（在 vite.config.ts 和 tsconfig.json 中均已配置）。通过 `@tauri-apps/api/core` 的 `invoke()` 进行 Tauri IPC 通信。窗口间数据传递采用"后端缓存 + 前端主动拉取"模式（非 Event 推送）。所有视图均为懒加载。
@@ -96,7 +97,7 @@ npm run preview
 
 - **蒙版窗口流程：** `lib.rs` setup → 快捷键/托盘回调 → `capture::capture_fullscreen_with_cache()` → 缓存全屏截图到 `CachedScreenStore.screen` → `window::create_overlay_window()` → 后端将 JPEG 图像数据存入 `CachedScreenStore.overlay_image` → OverlayView 调用 `get_overlay_image` 命令拉取数据 → 绘制截图 → 用户框选 → `capture_region_from_cache` 命令 → 返回 `CropResult`（含图像和位置信息）→ `store_pin_image` 存储图像 → 创建贴图窗口
 - **贴图窗口流程：** `create_pin_window()` 创建 WebviewWindow → PinView 调用 `get_pin_image` 命令从 `PinImageStore` 拉取图像数据 → 显示图片 + ControlBar
-- **翻译流程：** 用户点击"AI 翻译"按钮 → PinView 调用 `get_config` 获取目标语言 → 调用 `translate_image` 命令 → 后端执行 Tesseract OCR 提取文字及坐标 → 查找历史缓存（根据 OCR 文本和目标语言匹配，命中则直接返回）→ 未命中则调用文本模型 API 翻译 → 返回 `TranslateResult`（包含 `TranslatedBlock[]` 和 `from_cache` 标志）→ 前端渲染翻译覆盖层 → 后端异步保存历史记录（含 `target_language` 和 `blocks_json`）
+- **翻译流程：** 用户点击"翻译"按钮 → PinView 调用 `get_config` 获取目标语言 → 调用 `translate_image` 命令 → 后端执行 Tesseract OCR 提取文字及坐标 → 查找历史缓存（根据 OCR 文本和目标语言匹配，命中则直接返回）→ 未命中则调用文本模型 API 翻译 → 返回 `TranslateResult`（包含 `TranslatedBlock[]` 和 `from_cache` 标志）→ 前端在右侧译文面板渲染翻译结果 → 后端异步保存历史记录（含 `target_language` 和 `blocks_json`）
 - **历史记录流程：** 翻译完成 → 后端自动保存到 SQLite → 用户点击托盘"历史" → 前端调用 `get_history_list` → HistoryView 展示列表
 
 ### AppConfig 结构（Rust）
@@ -106,6 +107,7 @@ pub struct AppConfig {
     pub api_base_url: String,      // AI API 基础地址
     pub model: String,             // AI 模型名称，例如 "gpt-4o"
     pub target_language: String,   // 目标翻译语言，默认 "zh-CN"
+    pub language: String,          // 界面语言，"auto" 跟随系统，"zh-CN" 或 "en-US"
     pub shortcuts: ShortcutConfig, // 快捷键配置
 }
 
@@ -118,8 +120,10 @@ pub struct ShortcutConfig {
 ### 关键设计决策
 
 - **配置存储：** TOML 文件存储在磁盘上，API 密钥通过操作系统凭据管理器（`keyring` crate）保存 — 不写入配置文件
+- **界面语言：** 支持"跟随系统"、"简体中文"、"English"三种选项；"跟随系统"时使用 `sys-locale` 检测系统语言
 - **翻译流程：** 本地 Tesseract OCR 提取文字及坐标 → 查找历史缓存（根据 OCR 文本和目标语言匹配）→ 未命中则调用 AI API 翻译 → 按行匹配坐标返回翻译块
 - **翻译缓存：** 历史记录存储 `target_language` 和 `blocks_json` 字段，用于缓存匹配；命中缓存时直接返回翻译结果，跳过 API 调用
+- **译文展示：** 翻译结果显示在右侧独立面板，支持高度拉伸；原文/译文切换时隐藏/显示译文面板
 - **Tesseract 资源：** 项目捆绑 Tesseract 可执行文件和语言数据（`src-tauri/resources/tesseract/`），包含中文简体（`chi_sim.traineddata`）和英文（`eng.traineddata`）训练数据，以及 Windows DLL 依赖；OCR 模块优先从资源目录查找，开发模式下回退到系统 PATH
 - **贴图窗口：** 每张贴图截图都是一个独立的透明 Tauri Webview 窗口，定位在原始截取坐标处，窗口尺寸 = 图片尺寸 + 14px 内边距 + 36px 控制栏高度
 - **图像缓存：** 全屏截图缓存于 `CachedScreenStore`（含 `screen` 和 `overlay_image`），贴图图像缓存于 `PinImageStore`，前端通过命令主动拉取而非 Event 推送

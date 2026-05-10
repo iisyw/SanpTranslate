@@ -57,16 +57,21 @@
           <n-card :title="t('settings.shortcutConfig')" size="small">
             <n-form label-placement="left" label-width="100" :show-feedback="false">
               <n-form-item :label="t('settings.captureShortcut')">
-                <n-input
-                  v-model:value="formData.shortcuts_capture"
-                  placeholder="Ctrl+Alt+L"
+                <ShortcutInput
+                  v-model="formData.shortcuts_capture"
+                  :placeholder="t('settings.clickToSet')"
                 />
               </n-form-item>
               <n-form-item :label="t('settings.pinClipboardShortcut')">
-                <n-input
-                  v-model:value="formData.shortcuts_pin_clipboard"
-                  placeholder="Ctrl+Alt+P"
+                <ShortcutInput
+                  v-model="formData.shortcuts_pin_clipboard"
+                  :placeholder="t('settings.clickToSet')"
                 />
+              </n-form-item>
+              <n-form-item :label="''">
+                <n-button size="small" @click="onRestoreDefaults">
+                  {{ t('settings.restoreDefaults') }}
+                </n-button>
               </n-form-item>
             </n-form>
           </n-card>
@@ -105,6 +110,7 @@ import {
 import { useConfigStore } from '@/stores/configStore'
 import { testApiConnection, type AppConfig } from '@/utils/tauri'
 import { logger } from '@/utils/logger'
+import ShortcutInput from '@/components/ShortcutInput.vue'
 
 const TAG = 'SettingsView'
 const { t, locale } = useI18n()
@@ -117,6 +123,10 @@ const { message } = createDiscreteApi(['message'], {
 })
 
 const configStore = useConfigStore()
+
+// 默认快捷键值
+const DEFAULT_CAPTURE_SHORTCUT = 'Ctrl+Alt+L'
+const DEFAULT_PIN_CLIPBOARD_SHORTCUT = 'Ctrl+Alt+P'
 
 // 表单数据（扁平化结构，方便 v-model 双向绑定）
 const formData = reactive({
@@ -185,7 +195,7 @@ async function onSave() {
       },
     }
 
-    // 保存配置到 TOML 文件（后端会自动更新托盘菜单和广播语言变更事件）
+    // 保存配置到 TOML 文件（后端会自动更新快捷键、托盘菜单和广播语言变更事件）
     await configStore.updateConfig(newConfig)
 
     // 如果用户输入了新的 API 密钥，保存到 keyring
@@ -210,6 +220,14 @@ async function onSave() {
   } finally {
     saving.value = false
   }
+}
+
+/** 恢复默认快捷键 */
+function onRestoreDefaults() {
+  formData.shortcuts_capture = DEFAULT_CAPTURE_SHORTCUT
+  formData.shortcuts_pin_clipboard = DEFAULT_PIN_CLIPBOARD_SHORTCUT
+  message.info(t('settings.shortcutsRestored'))
+  logger.info(TAG, '快捷键已恢复默认')
 }
 
 /** 测试 API 连接 */
