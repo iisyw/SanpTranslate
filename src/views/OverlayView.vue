@@ -15,6 +15,13 @@
     >
       {{ selectionWidth }} x {{ selectionHeight }}
     </div>
+    <!-- 高可见性自定义光标：白色十字 + drop-shadow 暗色轮廓，在任何背景上都清晰可见 -->
+    <div class="custom-cursor" :style="{ left: cursorX + 'px', top: cursorY + 'px' }">
+      <svg width="20" height="20" viewBox="0 0 20 20">
+        <line x1="10" y1="2" x2="10" y2="18" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="2" y1="10" x2="18" y2="10" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
   </div>
 </template>
 
@@ -44,8 +51,11 @@ let rafId: number | null = null
 const selectionWidth = computed(() => Math.abs(endX.value - startX.value))
 const selectionHeight = computed(() => Math.abs(endY.value - startY.value))
 
+const cursorX = ref(0)
+const cursorY = ref(0)
+
 const containerStyle = computed(() => ({
-  cursor: 'crosshair',
+  cursor: 'none',
 }))
 
 const sizeTipStyle = computed(() => {
@@ -111,6 +121,8 @@ function onMouseDown(e: MouseEvent) {
 }
 
 function onMouseMove(e: MouseEvent) {
+  cursorX.value = e.clientX
+  cursorY.value = e.clientY
   if (!isSelecting.value) return
   endX.value = e.clientX
   endY.value = e.clientY
@@ -338,6 +350,18 @@ onUnmounted(() => {
   pointer-events: none;
   white-space: nowrap;
   z-index: 10;
+}
+
+.custom-cursor {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+}
+
+.custom-cursor svg {
+  display: block;
 }
 
 </style>
