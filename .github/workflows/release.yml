@@ -157,8 +157,7 @@ jobs:
         with:
           name: SnapTranslate ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
-          body_path: .github/release-notes.md
           files: artifacts/*
-          generate_release_notes: false
+          generate_release_notes: true
           draft: true
           prerelease: false
