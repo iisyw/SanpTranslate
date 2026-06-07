@@ -68,6 +68,10 @@ pub fn run() {
             commands::restart_app
         ])
         .setup(|app| {
+            // 注册 updater 插件（必须在 setup 中注册，否则前端和后端都无法使用更新功能）
+            #[cfg(desktop)]
+            app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+
             let config_manager = config::ConfigManager::new(app.handle())?;
             let app_config = config_manager.load()?;
 

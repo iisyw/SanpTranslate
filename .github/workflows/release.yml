@@ -32,29 +32,28 @@ jobs:
           fi
           echo "version=$CARGO_VERSION" >> "$GITHUB_OUTPUT"
 
-  # 跨平台构建
-  build:
+  # 跨平台构建并发布（使用 tauri-action 自动生成 latest.json）
+  release:
     needs: validate
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - platform: windows-latest
             target: x86_64-pc-windows-msvc
-            bundle-dir: bundle/x86_64-pc-windows-msvc
-            artifact-name: SnapTranslate-Windows-x86_64
+            args: ''
 
-          - os: macos-latest
+          - platform: macos-latest
             target: x86_64-apple-darwin
-            bundle-dir: bundle/x86_64-apple-darwin
-            artifact-name: SnapTranslate-macOS-x86_64
+            args: '--target x86_64-apple-darwin'
 
-          - os: ubuntu-latest
+          - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            bundle-dir: bundle/x86_64-unknown-linux-gnu
-            artifact-name: SnapTranslate-Linux-x86_64
+            args: ''
 
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -80,7 +79,7 @@ jobs:
 
       # Linux 系统依赖
       - name: 安装 Linux 系统依赖
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -96,68 +95,20 @@ jobs:
       - name: 安装前端依赖
         run: npm ci
 
-      # 构建 Tauri 应用
-      - name: 构建 Tauri 应用 (${{ matrix.target }})
-        run: npm run tauri build
+      # 使用 tauri-action 构建、生成更新产物并发布
+      - uses: tauri-apps/tauri-action@v1
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-
-      # 收集构建产物
-      - name: 整理安装包
-        shell: bash
-        run: |
-          mkdir -p "${{ matrix.bundle-dir }}"
-          if [ -d "src-tauri/target/release/bundle/msi" ]; then
-            cp src-tauri/target/release/bundle/msi/*.msi "${{ matrix.bundle-dir }}/" || true
-          fi
-          if [ -d "src-tauri/target/release/bundle/nsis" ]; then
-            cp src-tauri/target/release/bundle/nsis/*.exe "${{ matrix.bundle-dir }}/" || true
-          fi
-          if [ -d "src-tauri/target/release/bundle/dmg" ]; then
-            cp src-tauri/target/release/bundle/dmg/*.dmg "${{ matrix.bundle-dir }}/" || true
-          fi
-          if [ -d "src-tauri/target/release/bundle/deb" ]; then
-            cp src-tauri/target/release/bundle/deb/*.deb "${{ matrix.bundle-dir }}/" || true
-          fi
-          if [ -d "src-tauri/target/release/bundle/appimage" ]; then
-            cp src-tauri/target/release/bundle/appimage/*.AppImage "${{ matrix.bundle-dir }}/" || true
-          fi
-          ls -lh "${{ matrix.bundle-dir }}/"
-
-      # 上传构建产物
-      - name: 上传安装包
-        uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact-name }}
-          path: ${{ matrix.bundle-dir }}/*
-          if-no-files-found: error
-
-  # 创建 GitHub Release 并上传所有安装包
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 下载所有构建产物
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          pattern: SnapTranslate-*
-          merge-multiple: true
-
-      - name: 查看产物清单
-        run: ls -lhR artifacts/
-
-      - name: 创建 Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: SnapTranslate ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
-          files: artifacts/*
-          generate_release_notes: true
-          draft: true
+          tagName: ${{ github.ref_name }}
+          releaseName: 'SnapTranslate ${{ github.ref_name }}'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true
           prerelease: false
+          # 优先使用 NSIS 安装包（项目使用自定义 NSIS 模板）
+          updaterJsonPreferNsis: true
+          # 自动生成 latest.json 供 updater 使用
+          uploadUpdaterJson: true
+          args: ${{ matrix.args }}
