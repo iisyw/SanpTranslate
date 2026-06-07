@@ -118,9 +118,9 @@ Download the latest installer for your platform from the [Releases](https://gith
 
 | Platform | Format |
 |----------|--------|
-| Windows 10+ | `.msi` / `.exe` |
+| Windows 10+ | `.exe` |
 | macOS 12+ | `.dmg` |
-| Linux (x86\_64) | `.deb` / `.AppImage` |
+| Linux (x86\_64) | `.AppImage` |
 
 ### System Requirements
 
@@ -149,7 +149,7 @@ Download the latest installer for your platform from the [Releases](https://gith
 | Desktop Framework | [Tauri 2.x](https://v2.tauri.app/) |
 | Frontend Framework | [Vue 3.5](https://vuejs.org/) + [TypeScript](https://www.typescriptlang.org/) + [Vite 6](https://vitejs.dev/) |
 | UI Component Library | [Naive UI](https://www.naiveui.com/) (Dark Theme) |
-| Backend Language | [Rust](https://www.rust-lang.org/) (2021 edition) |
+| Backend Language | [Rust](https://www.rust-lang.org/) (2024 edition) |
 | State Management | [Pinia 3](https://pinia.vuejs.org/) |
 | Routing | [Vue Router 5](https://router.vuejs.org/) |
 | Internationalization | [vue-i18n 11](https://vue-i18n.intlify.dev/) |

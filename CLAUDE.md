@@ -143,4 +143,4 @@ pub struct ShortcutConfig {
 - **日志系统：** 使用 `tauri-plugin-log`，输出到 Stdout、Webview 控制台和日志文件目录
 - **历史记录：** SQLite 数据库存储在 `{app_data_dir}/data/history.db`，最多保存 50 条记录，缩略图最大 200x200 JPEG 格式；数据库包含 `target_language` 和 `blocks_json` 列用于翻译缓存；新增 `image_blob` 列存储原图数据（Base64 编码）；文本翻译记录的 `image_data` 和 `thumbnail` 为 null
 - **开机自启动：** 使用 `tauri-plugin-autostart` 插件实现，支持 Windows/macOS/Linux 跨平台自启动
-- **NSIS 安装包：** 使用自定义 NSIS 安装包模板（`src-tauri/nsis/installer.nsi`），提供 Windows 平台的自定义安装体验；模板支持安装路径选择、桌面快捷方式、自动更新权限配置等
+- **NSIS 安装包：** 使用自定义 NSIS 安装包模板（`src-tauri/nsis/installer.nsi`），提供 Windows 平台的自定义安装体验；模板支持安装路径选择、桌面快捷方式、自动更新权限配置等；`bundle.targets` 已优化为仅生成 NSIS（Windows）、DMG+app（macOS）、AppImage（Linux），不再生成 MSI、deb、rpm 等冗余格式

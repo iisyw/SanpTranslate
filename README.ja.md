@@ -118,9 +118,9 @@ Ctrl+Alt+M を押す         テキスト翻訳ウィンドウを開き、直接
 
 | プラットフォーム | 形式 |
 |-----------------|------|
-| Windows 10+ | `.msi` / `.exe` |
+| Windows 10+ | `.exe` |
 | macOS 12+ | `.dmg` |
-| Linux (x86\_64) | `.deb` / `.AppImage` |
+| Linux (x86\_64) | `.AppImage` |
 
 ### システム要件
 
@@ -150,7 +150,7 @@ Ctrl+Alt+M を押す         テキスト翻訳ウィンドウを開き、直接
 | デスクトップフレームワーク | [Tauri 2.x](https://v2.tauri.app/) |
 | フロントエンドフレームワーク | [Vue 3.5](https://vuejs.org/) + [TypeScript](https://www.typescriptlang.org/) + [Vite 6](https://vitejs.dev/) |
 | UI コンポーネントライブラリ | [Naive UI](https://www.naiveui.com/)（ダークテーマ） |
-| バックエンド言語 | [Rust](https://www.rust-lang.org/)（2021 edition） |
+| バックエンド言語 | [Rust](https://www.rust-lang.org/)（2024 edition） |
 | 状態管理 | [Pinia 3](https://pinia.vuejs.org/) |
 | ルーティング | [Vue Router 5](https://router.vuejs.org/) |
 | 国際化 | [vue-i18n 11](https://vue-i18n.intlify.dev/) |

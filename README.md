@@ -118,9 +118,9 @@
 
 | 平台 | 格式 |
 |------|------|
-| Windows 10+ | `.msi` / `.exe` |
+| Windows 10+ | `.exe` |
 | macOS 12+ | `.dmg` |
-| Linux (x86\_64) | `.deb` / `.AppImage` |
+| Linux (x86\_64) | `.AppImage` |
 
 ### 系统要求
 
@@ -150,7 +150,7 @@
 | 桌面框架 | [Tauri 2.x](https://v2.tauri.app/) |
 | 前端框架 | [Vue 3.5](https://vuejs.org/) + [TypeScript](https://www.typescriptlang.org/) + [Vite 6](https://vitejs.dev/) |
 | UI 组件库 | [Naive UI](https://www.naiveui.com/)（深色主题） |
-| 后端语言 | [Rust](https://www.rust-lang.org/)（2021 edition） |
+| 后端语言 | [Rust](https://www.rust-lang.org/)（2024 edition） |
 | 状态管理 | [Pinia 3](https://pinia.vuejs.org/) |
 | 路由 | [Vue Router 5](https://router.vuejs.org/) |
 | 国际化 | [vue-i18n 11](https://vue-i18n.intlify.dev/) |
