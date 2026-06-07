@@ -35,10 +35,10 @@
 
 | Feature | Description |
 |---------|-------------|
-| **Region Screenshot Translation** | Global hotkey `Ctrl+Alt+L` activates the overlay, drag to select any region, screenshot pinned at original position automatically |
+| **Region Screenshot Translation** | Global hotkey `Ctrl+Alt+L` activates the overlay (custom crosshair cursor), drag to select any region, screenshot pinned at original position automatically |
 | **Clipboard Pin** | `Ctrl+Alt+P` pastes an image from the system clipboard onto the desktop for translation |
 | **Text Translation** | `Ctrl+Alt+M` opens a clean text translation window with customizable target language, `Ctrl+Enter` for quick translation |
-| **Local OCR** | Built-in Tesseract offline engine, supports Chinese, English, and Japanese, supports local smart auto-detection — no internet required |
+| **Local OCR** | Built-in Tesseract offline engine, supports Chinese, English, and Japanese, supports local smart auto-detection, configurable OCR source language in settings (auto/Chinese/English/Japanese) — no internet required |
 | **AI Translation** | Supports any OpenAI-compatible API (bring your own model and key), directly connecting to your AI capabilities |
 | **Smart Translation Cache** | Repeated content automatically matches historical records; cache hit skips the API call for instant results |
 | **In-Place Pin Window** | Screenshot fixed at the original capture position, right-side translation panel supports height adjustment, transparent dark theme for distraction-free viewing |
@@ -47,6 +47,7 @@
 | **Translation History** | All translation records automatically saved to local SQLite database; supports viewing, copying, deleting, and clearing |
 | **Bilingual UI** | Simplified Chinese / English interface with auto-detect system language support, instant switching |
 | **Privacy & Security** | Screenshots and text processed entirely locally; only translation requests communicate with your own API — **no telemetry or data upload** |
+| **Auto Update** | Automatically checks for updates on startup, silently downloads and installs new versions, restarts automatically upon completion |
 | **Auto Start** | Optional auto-start on boot, always ready when you need it |
 
 ---
@@ -61,6 +62,8 @@ On first use, right-click the system tray icon → **Settings**, then fill in:
 - **API Key**: Securely saved via the OS credential manager, never written to disk
 - **Model Name**: e.g., `gpt-4o`, `deepseek-chat`, etc.
 - **Target Language**: Translate to Chinese, English, Japanese, French, and 6 other languages
+- **OCR Source Language**: Set the OCR source language (auto-detect/Chinese/English/Japanese) for improved recognition accuracy
+- **Auto Update**: Optionally enable or disable automatic update checking on startup
 
 ### 2. Common Operations
 
@@ -97,9 +100,9 @@ Press Ctrl+Alt+M         Open text translation window, type and translate direct
 
 | Module | Preview |
 |--------|---------|
-| **Selection Overlay** | Semi-transparent dark mask + white dashed selection box + dimension indicator |
+| **Selection Overlay** | Semi-transparent dark mask + white dashed selection box + dimension indicator + crosshair cursor |
 | **Pin Window** | Screenshot displayed on top at original position + bottom control bar + right translation panel |
-| **Settings Page** | Naive UI dark theme, sectioned configuration: Language/General/API/Translation/Hotkeys |
+| **Settings Page** | Naive UI dark theme, sectioned configuration: Language/General/API/Translation/OCR/Hotkeys |
 | **History** | Thumbnail list + translation summary + action buttons |
 | **Text Translation** | Centered on-bottom always-on-top window, clean dual-column layout |
 
@@ -158,6 +161,7 @@ Download the latest installer for your platform from the [Releases](https://gith
 | Global Hotkeys | [tauri-plugin-global-shortcut](https://github.com/tauri-apps/tauri-plugin-global-shortcut) |
 | Clipboard | [tauri-plugin-clipboard-manager](https://github.com/tauri-apps/tauri-plugin-clipboard-manager) |
 | Auto Start | [tauri-plugin-autostart](https://github.com/tauri-apps/tauri-plugin-autostart) |
+| Auto Update | [tauri-plugin-updater](https://github.com/tauri-apps/tauri-plugin-updater) |
 
 ---
 
@@ -211,9 +215,9 @@ SnapTranslate/
 │   │   ├── HistoryItem.vue       #     History entry
 │   │   └── ShortcutInput.vue     #     Hotkey capture input
 │   ├── views/                    #   Page views
-│   │   ├── OverlayView.vue       #     Fullscreen selection overlay (Canvas)
-│   │   ├── PinView.vue           #     Pin window (screenshot + translation panel)
-│   │   ├── SettingsView.vue      #     Settings page (Naive UI)
+│   │   ├── OverlayView.vue       #     Fullscreen selection overlay (Canvas + crosshair cursor)
+│   │   ├── PinView.vue           #     Pin window (screenshot + translation panel, stretch support)
+│   │   ├── SettingsView.vue      #     Settings page (Naive UI, with OCR language and auto-update)
 │   │   ├── HistoryView.vue       #     History page
 │   │   └── TextTranslateView.vue #     Text translation window
 │   ├── stores/                   #   Pinia state management
@@ -237,18 +241,20 @@ SnapTranslate/
 ├── src-tauri/                    # Rust backend
 │   ├── src/
 │   │   ├── capture/mod.rs        #   Capture module (xcap wrapper)
-│   │   ├── ocr/mod.rs            #   OCR module (Tesseract CLI)
+│   │   ├── ocr/mod.rs            #   OCR module (Tesseract CLI, with source language selection)
 │   │   ├── translate/mod.rs      #   Translation module (AI API + cache)
+│   │   ├── update/mod.rs         #   Auto-update module (silent check + download & install)
 │   │   ├── config/               #   Configuration management (TOML + keyring)
 │   │   ├── history/mod.rs        #   History (SQLite CRUD)
 │   │   ├── clipboard/mod.rs      #   Clipboard read/write
 │   │   ├── hotkey/mod.rs         #   Global hotkey registration
 │   │   ├── window/mod.rs         #   Window management (singleton/multi-instance)
 │   │   ├── tray/mod.rs           #   System tray menu
-│   │   ├── commands.rs           #   21 Tauri commands
+│   │   ├── commands.rs           #   23 Tauri commands
 │   │   ├── error.rs              #   Unified error types
 │   │   ├── lib.rs                #   Setup entry
 │   │   └── main.rs               #   Main function
+│   ├── nsis/                     #   NSIS installer template
 │   └── resources/tesseract/      #   Tesseract OCR offline data
 ├── docs/                         # Project documentation
 │   ├── SRS.md                    #   Software Requirements Specification

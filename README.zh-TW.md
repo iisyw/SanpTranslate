@@ -35,10 +35,10 @@
 
 | 特性 | 說明 |
 |------|------|
-| **框選截圖翻譯** | 全局快速鍵 `Ctrl+Alt+L` 喚起截圖遮罩，拖拽框選任意區域，截圖自動貼在螢幕原位 |
+| **框選截圖翻譯** | 全局快速鍵 `Ctrl+Alt+L` 喚起截圖遮罩（自訂十字準星光標），拖拽框選任意區域，截圖自動貼在螢幕原位 |
 | **剪貼簿貼圖** | `Ctrl+Alt+P` 將系統剪貼簿中的圖片貼到桌面上進行翻譯 |
 | **文字翻譯** | `Ctrl+Alt+M` 開啟簡潔文字翻譯視窗，支援自訂目標語言，Ctrl+Enter 快捷翻譯 |
-| **本機 OCR** | 內建 Tesseract 離線引擎，支援中簡、英、日多國語言，支援本地智慧自動語言偵測，無需連網 |
+| **本機 OCR** | 內建 Tesseract 離線引擎，支援中簡、英、日多國語言，支援本地智慧自動語言偵測，可在設定中選擇 OCR 源語言（自動/中文/英文/日文），無需連網 |
 | **AI 翻譯** | 支援任意 OpenAI 相容 API（自備模型與金鑰），與你的 AI 能力直接對接 |
 | **智慧翻譯快取** | 重複內容自動比對歷史記錄，命中快取則跳過 API 呼叫，秒出結果 |
 | **原位貼圖視窗** | 截圖固定在原始截取位置，右側譯文面板支援高度拉伸，深色透明無干擾 |
@@ -47,6 +47,7 @@
 | **翻譯歷史** | 自動保存所有翻譯記錄到本機 SQLite 資料庫，支援檢視、複製、刪除、清空 |
 | **雙語介面** | 簡體中文 / English 雙語言介面，支援跟隨系統自動切換，切換即時生效 |
 | **隱私安全** | 截圖和文字全在本機處理，僅翻譯請求與自配 API 通訊，**無任何遙測或資料上傳** |
+| **自動更新** | 應用啟動時自動檢查更新，發現新版本靜默下載安裝，完成後自動重啟 |
 | **開機自啟動** | 可選開機自動啟動，隨時待命 |
 
 ---
@@ -61,6 +62,8 @@
 - **API 金鑰**：透過作業系統憑證管理員安全保存，不落碟
 - **模型名稱**：例如 `gpt-4o`、`deepseek-chat` 等
 - **目標語言**：翻譯成中文、英語、日語、法語等 9 種語言
+- **OCR 源語言**：設定 OCR 識別的源語言（自動偵測/中文/英文/日文），提升辨識準確度
+- **自動更新**：可選開啟或關閉啟動時自動檢查更新
 
 ### 2. 常用操作
 
@@ -97,9 +100,9 @@
 
 | 模組 | 預覽 |
 |------|------|
-| **截圖遮罩** | 半透明暗色遮罩 + 白虛線框選 + 尺寸提示 |
+| **截圖遮罩** | 半透明暗色遮罩 + 白虛線框選 + 尺寸提示 + 十字準星光標 |
 | **貼圖視窗** | 截圖原位置置頂顯示 + 底部控制欄 + 右側譯文面板 |
-| **設定頁面** | Naive UI 深色主題，分割區配置：語言/一般/API/翻譯/快速鍵 |
+| **設定頁面** | Naive UI 深色主題，分割區配置：語言/一般/API/翻譯/OCR/快速鍵 |
 | **歷史記錄** | 縮圖列表 + 翻譯摘要 + 操作按鈕 |
 | **文字翻譯** | 螢幕下方居中置頂視窗，簡潔雙欄佈局 |
 
@@ -159,6 +162,7 @@
 | 全域快速鍵 | [tauri-plugin-global-shortcut](https://github.com/tauri-apps/tauri-plugin-global-shortcut) |
 | 剪貼簿 | [tauri-plugin-clipboard-manager](https://github.com/tauri-apps/tauri-plugin-clipboard-manager) |
 | 開機自啟 | [tauri-plugin-autostart](https://github.com/tauri-apps/tauri-plugin-autostart) |
+| 自動更新 | [tauri-plugin-updater](https://github.com/tauri-apps/tauri-plugin-updater) |
 
 ---
 
@@ -212,9 +216,9 @@ SnapTranslate/
 │   │   ├── HistoryItem.vue       #     歷史記錄條目
 │   │   └── ShortcutInput.vue     #     快速鍵捕獲輸入
 │   ├── views/                    #   頁面檢視
-│   │   ├── OverlayView.vue       #     全螢幕截圖遮罩（Canvas 框選）
-│   │   ├── PinView.vue           #     貼圖視窗（截圖+譯文面板）
-│   │   ├── SettingsView.vue      #     設定頁面（Naive UI）
+│   │   ├── OverlayView.vue       #     全螢幕截圖遮罩（Canvas 框選 + 十字準星光標）
+│   │   ├── PinView.vue           #     貼圖視窗（截圖+譯文面板，支援面板拉伸）
+│   │   ├── SettingsView.vue      #     設定頁面（Naive UI，含 OCR 語言和自動更新）
 │   │   ├── HistoryView.vue       #     歷史記錄頁面
 │   │   └── TextTranslateView.vue #     文字翻譯視窗
 │   ├── stores/                   #   Pinia 狀態管理
@@ -238,18 +242,20 @@ SnapTranslate/
 ├── src-tauri/                    # Rust 後端
 │   ├── src/
 │   │   ├── capture/mod.rs        #   截圖模組（xcap 封裝）
-│   │   ├── ocr/mod.rs            #   OCR 模組（Tesseract CLI）
+│   │   ├── ocr/mod.rs            #   OCR 模組（Tesseract CLI，支援源語言選擇）
 │   │   ├── translate/mod.rs      #   翻譯模組（AI API + 快取）
+│   │   ├── update/mod.rs         #   自動更新模組（靜默檢查+下載安裝）
 │   │   ├── config/               #   設定管理（TOML + keyring）
 │   │   ├── history/mod.rs        #   歷史記錄（SQLite CRUD）
 │   │   ├── clipboard/mod.rs      #   剪貼簿讀寫
 │   │   ├── hotkey/mod.rs         #   全域快速鍵註冊
 │   │   ├── window/mod.rs         #   視窗管理（單例/多實例）
 │   │   ├── tray/mod.rs           #   系統托盤選單
-│   │   ├── commands.rs           #   21 個 Tauri 命令
+│   │   ├── commands.rs           #   23 個 Tauri 命令
 │   │   ├── error.rs              #   統一錯誤型別
 │   │   ├── lib.rs                #   setup 進入點
 │   │   └── main.rs               #   main 函式
+│   ├── nsis/                     #   NSIS 安裝包模板
 │   └── resources/tesseract/      #   Tesseract OCR 離線資料
 ├── docs/                         # 專案文件
 │   ├── SRS.md                    #   軟體需求規格說明書
