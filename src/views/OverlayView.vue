@@ -132,6 +132,10 @@ function onMouseDown(e: MouseEvent) {
 }
 
 function onMouseMove(e: MouseEvent) {
+  // 首次鼠标移动时显示自定义光标
+  if (cursorRef.value && cursorRef.value.style.display === 'none') {
+    cursorRef.value.style.display = ''
+  }
   // 更新光标位置（普通变量，无响应式开销）
   _cursorX = e.clientX
   _cursorY = e.clientY
@@ -299,6 +303,11 @@ onMounted(async () => {
   initCanvasSize()
   // 立即绘制半透明遮罩，不等截图加载完成，让用户感知蒙版已响应
   drawCanvas()
+
+  // 初始隐藏自定义光标，防止默认位置 (0,0) 时十字准星左上角出现 "⌈" 残影
+  if (cursorRef.value) {
+    cursorRef.value.style.display = 'none'
+  }
 
   // 轮询拉取蒙版图像数据（后台线程异步编码截图）
   const POLL_INTERVAL_MS = 100
