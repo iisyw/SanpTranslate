@@ -31,6 +31,26 @@
 
 ---
 
+## Screenshots
+
+> Below are previews of the application interface (the project includes a complete logo design page `logo-design.html`):
+
+<p align="center">
+  <img src="docs/assets/readme-preview.png" alt="SnapTranslate README preview" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
+</p>
+
+| Module | Preview |
+|--------|---------|
+| **Selection Overlay** | Semi-transparent dark mask + white dashed selection box + dimension indicator + crosshair cursor |
+| **Pin Window** | Screenshot displayed on top at original position + bottom control bar + right translation panel |
+| **Settings Page** | Naive UI dark theme, sectioned configuration: Language/General/API/Translation/OCR/Hotkeys |
+| **History** | Thumbnail list + translation summary + action buttons |
+| **Text Translation** | Centered on-bottom always-on-top window, clean dual-column layout |
+
+> Run the application to experience all interfaces first-hand.
+
+---
+
 ## Features
 
 | Feature | Description |
@@ -91,26 +111,6 @@ Press Ctrl+Alt+M         Open text translation window, type and translate direct
 | Drag Window | Window title area | Freely drag (excluding button areas) |
 | Stretch Translation Panel | Panel edge | Right panel supports height adjustment |
 | Close | Double-click image area | Quickly close the pin window |
-
----
-
-## Screenshots
-
-> Below are previews of the application interface (the project includes a complete logo design page `logo-design.html`):
-
-<p align="center">
-  <img src="docs/assets/readme-preview.png" alt="SnapTranslate README preview" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
-</p>
-
-| Module | Preview |
-|--------|---------|
-| **Selection Overlay** | Semi-transparent dark mask + white dashed selection box + dimension indicator + crosshair cursor |
-| **Pin Window** | Screenshot displayed on top at original position + bottom control bar + right translation panel |
-| **Settings Page** | Naive UI dark theme, sectioned configuration: Language/General/API/Translation/OCR/Hotkeys |
-| **History** | Thumbnail list + translation summary + action buttons |
-| **Text Translation** | Centered on-bottom always-on-top window, clean dual-column layout |
-
-> Run the application to experience all interfaces first-hand.
 
 ---
 
