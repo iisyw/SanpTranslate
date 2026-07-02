@@ -734,7 +734,7 @@ pub fn reveal_in_explorer(path: String) -> Result<(), String> {
     #[cfg(target_os = "linux")]
     {
         Command::new("xdg-open")
-            .arg(if path_obj.is_dir() { &path } else { path_obj.parent().unwrap_or(path_obj) })
+            .arg(if path_obj.is_dir() { path.as_ref() } else { path_obj.parent().unwrap_or(path_obj) })
             .spawn()
             .map_err(|e| format!("打开目录失败: {}", e))?;
     }
